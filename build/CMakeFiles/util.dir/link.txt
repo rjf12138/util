@@ -1,2 +1,0 @@
-/usr/bin/ar qc libutild.a  CMakeFiles/util.dir/src/timer.cc.o
-/usr/bin/ranlib libutild.a
