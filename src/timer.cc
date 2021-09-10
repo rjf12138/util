@@ -8,11 +8,12 @@ loop_gap_(5),
 timer_id_(0)
 {
     this->init();
+    this->run_handler();
 }
 
 Timer::~Timer(void)
 {
-
+    this->stop_handler();
 }
 
 int 

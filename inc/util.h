@@ -2,6 +2,7 @@
 #define __UTIL_H__
 
 #include "basic/byte_buffer.h"
+#include "basic/wejson.h"
 #include "system/system.h"
 #include "data_structure/heap.h"
 
@@ -51,14 +52,15 @@ public:
     Timer(void);
     ~Timer(void);
 
-    virtual int run_handler(void);
-    virtual int stop_handler(void);
-
     // 添加定时器,错误返回-1， 成功返回一个定时器id
     int add(TimerEvent_t &event);
     // 根据定时器ID，取消定时器
     int cancel(int id);
-    
+
+private:
+    virtual int run_handler(void);
+    virtual int stop_handler(void);
+
 private:
     bool exit_;
     os::Time time_;
@@ -68,6 +70,37 @@ private:
     os::Mutex mutex_;
     ds::MinHeap<TimerEvent_t> timer_heap_;
 };
+
+/////////////////////////// 消息总线 ////////////////////////////////////////////////
+typedef void* (*MsgRecv_CallBack_t)(basic::WeJson msg);
+struct MsgBusUser {
+    std::string topic;                  // 订阅的消息主题
+    MsgRecv_CallBack_t msg_handler;     // 消息接受函数
+};
+
+class MsgBus {
+    typedef std::map<std::string, ds::Queue<basic::WeJson>> MSG_BUFFER_CENTER;
+public:
+    MsgBus(void);
+    virtual ~MsgBus(void);
+
+    // 创建主题
+    virtual int create_topic(const std::string &topic);
+    // 删除主题
+    virtual int delete_topic(const std::string &topic);
+    // 发布消息
+    virtual int publish_msg(const basic::WeJson &msg);
+
+private:
+    std::vector<std::string> publisher_;      // 创建的主题
+    std::vector<std::string> subscriber_;     // 订阅的主题
+
+    uint32_t handle_;
+private:
+    static os::ThreadPool msg_handle_pool_; 
+    static MSG_BUFFER_CENTER msg_buffer_; // 发布消息的缓冲区
+};
+
 
 } // namespace util
 
