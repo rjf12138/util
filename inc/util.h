@@ -72,6 +72,49 @@ private:
 };
 
 /////////////////////////// 消息总线 ////////////////////////////////////////////////
+#define INVALID_ID  0
+
+typedef uint32_t obj_id_t;
+typedef std::map<int, MsgObject*>  MSG_OBJECT_MAP;
+
+class MsgObject {
+public:
+    MsgObject(void);
+    virtual ~MsgObject(void);
+
+    obj_id_t id(void) const {return id_;}
+    virtual int msg_handler(obj_id_t sender, const basic::WeJson &msg);
+
+private:
+    obj_id_t id_;
+
+public:
+    static bool check_id(const obj_id_t &id);
+    static int send_msg(const basic::WeJson &msg, obj_id_t recv_id = INVALID_ID, obj_id_t sender_id = INVALID_ID);
+
+private:
+    static int start(void);
+    static int stop(void) {is_running = false;};
+    static obj_id_t next_id(void);
+
+    static int register_object(MsgObject *obj_ptr);
+    static int remove_object(const obj_id_t &id);
+
+    static void* message_forwarding_center(void *arg);
+
+private:
+    static bool is_running;
+    static obj_id_t next_object_id_;
+
+    static MSG_OBJECT_MAP objects_;
+    static os::ThreadPool msg_handle_pool_;
+
+    static ds::Queue<basic::WeJson> msg_queue1_;
+    static ds::Queue<basic::WeJson> msg_queue2_;
+    static ds::Queue<basic::WeJson> msg_queue3_;
+    static ds::Queue<basic::WeJson> msg_queue4_;
+};
+
 typedef void* (*MsgRecv_CallBack_t)(basic::WeJson msg);
 struct MsgBusUser {
     std::string topic;                  // 订阅的消息主题
