@@ -20,7 +20,7 @@ MsgObject::check_id(const obj_id_t &id)
 }
 
 int 
-MsgObject::send_msg(const basic::WeJson &msg, obj_id_t recv_id, obj_id_t sender_id)
+MsgObject::send_msg(obj_id_t recv_id, const basic::WeJson &msg, obj_id_t sender_id)
 {
     if (check_id(recv_id) == false) {
         return -1;
@@ -28,10 +28,14 @@ MsgObject::send_msg(const basic::WeJson &msg, obj_id_t recv_id, obj_id_t sender_
 
     basic::WeJson send_msg;
     send_msg.create_object();
-    send_msg.get_object().add("recv_id", (int)recv_id);
-    send_msg.get_object().add("sender_id", (int)sender_id);
-    send_msg.get_object().add("data", msg);
+    send_msg.get_object().add(RECEIVER_OBJECT_ID, (int)recv_id);
+    send_msg.get_object().add(SENDER_OBJECT_ID, (int)sender_id);
+    send_msg.get_object().add(MSG_CONTENT, msg);
     
+    int choose_queue_num = recv_id % MAX_HANDER_THREAD; // 确定数据所放的队列中
+    msg_buffer_[choose_queue_num].mutex.lock();
+    msg_buffer_[choose_queue_num].queue.push(send_msg);
+    msg_buffer_[choose_queue_num].mutex.unlock();
 
     return 0;
 }
@@ -45,8 +49,8 @@ MsgObject::start(void)
 
     is_running = true;
 
-    std::size_t min_thread = 4;
-    std::size_t max_thread = 4;
+    std::size_t min_thread = MAX_HANDER_THREAD;
+    std::size_t max_thread = MAX_HANDER_THREAD;
     ThreadPoolConfig config = {min_thread, max_thread, 30, 60, SHUTDOWN_ALL_THREAD_IMMEDIATELY};
     msg_handle_pool_.set_threadpool_config(config);
     msg_handle_pool_.init();
@@ -55,17 +59,13 @@ MsgObject::start(void)
     task.work_func = message_forwarding_center;
     task.exit_task = [](void*)->void*{is_running = false;};//exit_msg_center;
 
-    task.thread_arg = &msg_queue1_;
-    msg_handle_pool_.add_task(task);
+    for (int i = 0; i < MAX_HANDER_THREAD; ++i) {
+        MsgBuffer_Info_t info;
+        msg_buffer_.push_back(info);
 
-    task.thread_arg = &msg_queue2_;
-    msg_handle_pool_.add_task(task);
-
-    task.thread_arg = &msg_queue3_;
-    msg_handle_pool_.add_task(task);
-
-    task.thread_arg = &msg_queue4_;
-    msg_handle_pool_.add_task(task);
+        task.thread_arg = &msg_buffer_[i];
+        msg_handle_pool_.add_task(task);
+    }
 
     static MsgObject g_msg_object; // 这个全局的变量保证一旦消息总线开始运行，直到程序结束才会正式停止消息总线
 
@@ -99,7 +99,10 @@ MsgObject::register_object(MsgObject *obj_ptr)
     if (check_id(msg_id) == true) {
         return -1;
     }
+
+    obj_lock_.lock();
     objects_[msg_id] = obj_ptr;
+    obj_lock_.unlock();
 
     return 0;
 }
@@ -109,7 +112,9 @@ MsgObject::remove_object(const obj_id_t &id)
 {
     auto iter = objects_.find(id);
     if (iter != objects_.end()) {
+        obj_lock_.lock();
         objects_.erase(iter);
+        obj_lock_.unlock();
     }
 
     return 0;
@@ -122,12 +127,33 @@ MsgObject::message_forwarding_center(void *arg)
         return nullptr;
     }
 
-    ds::Queue<basic::WeJson> *msg_queue = reinterpret_cast<ds::Queue<basic::WeJson>*>(arg);
+    MsgBuffer_Info_t *msg_queue = reinterpret_cast<MsgBuffer_Info_t*>(arg);
     while (is_running) {
-        if (msg_queue->size() > 0) { // TODO: 处理消息转发
-            os::Mutex 
-            basic::WeJson msg = 
+        if (msg_queue->queue.size() > 0) { // TODO: 处理消息转发
+            basic::WeJson msg;
+            msg_queue->mutex.lock();
+            if (msg_queue->queue.pop(msg) == 0) {
+                continue;
+            }
+            msg_queue->mutex.unlock();
+
+            JsonObject &jsobj = msg.get_object();
+            if (jsobj.find(RECEIVER_OBJECT_ID) != jsobj.end()) {
+                JsonNumber js_sender_id = jsobj[SENDER_OBJECT_ID];
+                obj_id_t sender_id = static_cast<obj_id_t>(js_sender_id.to_int());
+
+                JsonNumber js_recv_id = jsobj[RECEIVER_OBJECT_ID];
+                obj_id_t recv_id = static_cast<obj_id_t>(js_recv_id.to_int());
+
+                auto find_iter = objects_.find(recv_id);
+                if (find_iter != objects_.end()) {
+                    if (find_iter->second != nullptr) {
+                        find_iter->second->msg_handler(sender_id, jsobj[MSG_CONTENT]);
+                    }
+                }
+            }
         }
+        Time::sleep(10);
     }
 }
 
@@ -142,9 +168,21 @@ MsgObject::MsgObject(void)
 
 MsgObject::~MsgObject(void)
 {
-
+    MsgObject::remove_object(id_);
+    if (objects_.size() == 0) {
+        MsgObject::stop();
+    }
 }
 
-    virtual int msg_handler(const basic::WeJson &msg);
+int 
+MsgObject::msg_handler(obj_id_t sender, const basic::WeJson &msg)
+{
+    return 0;
+}
+
+int MsgObject::send_msg(obj_id_t recv_id, const basic::WeJson &msg)
+{
+    return MsgObject::send_msg(recv_id, msg, id_);
+}
 
 }

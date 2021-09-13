@@ -72,10 +72,23 @@ private:
 };
 
 /////////////////////////// 消息总线 ////////////////////////////////////////////////
+// TODO: 不支持二进制数据
 #define INVALID_ID  0
+
+#define RECEIVER_OBJECT_ID  "recv_id"
+#define SENDER_OBJECT_ID    "sender_id"
+#define MSG_CONTENT         "msg_content"
+
+#define MAX_HANDER_THREAD   4
+
+typedef struct MsgBuffer_Info {
+    ds::Queue<basic::WeJson> queue;
+    os::Mutex mutex;
+} MsgBuffer_Info_t;
 
 typedef uint32_t obj_id_t;
 typedef std::map<int, MsgObject*>  MSG_OBJECT_MAP;
+typedef std::vector<MsgBuffer_Info_t> MSG_BUFFER;
 
 class MsgObject {
 public:
@@ -83,14 +96,15 @@ public:
     virtual ~MsgObject(void);
 
     obj_id_t id(void) const {return id_;}
-    virtual int msg_handler(obj_id_t sender, const basic::WeJson &msg);
 
+    virtual int msg_handler(obj_id_t sender, const basic::WeJson &msg);
+    int send_msg(obj_id_t recv_id, const basic::WeJson &msg);
 private:
     obj_id_t id_;
 
 public:
     static bool check_id(const obj_id_t &id);
-    static int send_msg(const basic::WeJson &msg, obj_id_t recv_id = INVALID_ID, obj_id_t sender_id = INVALID_ID);
+    static int send_msg(obj_id_t recv_id, const basic::WeJson &msg, obj_id_t sender_id = INVALID_ID);
 
 private:
     static int start(void);
@@ -106,15 +120,16 @@ private:
     static bool is_running;
     static obj_id_t next_object_id_;
 
+    static os::Mutex obj_lock_;
     static MSG_OBJECT_MAP objects_;
+
     static os::ThreadPool msg_handle_pool_;
 
-    static ds::Queue<basic::WeJson> msg_queue1_;
-    static ds::Queue<basic::WeJson> msg_queue2_;
-    static ds::Queue<basic::WeJson> msg_queue3_;
-    static ds::Queue<basic::WeJson> msg_queue4_;
+    static MSG_BUFFER msg_buffer_;;
 };
 
+
+///////////////////////////// 观察者模式 //////////////////////////////////////////////////////
 typedef void* (*MsgRecv_CallBack_t)(basic::WeJson msg);
 struct MsgBusUser {
     std::string topic;                  // 订阅的消息主题
