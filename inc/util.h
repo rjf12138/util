@@ -87,6 +87,7 @@ typedef struct MsgBuffer_Info {
 } MsgBuffer_Info_t;
 
 typedef uint32_t obj_id_t;
+typedef std::map<std::string, std::list<obj_id_t>>  SUBSCRIBE_TOPIC_OBJECTS_MAP;
 typedef std::map<int, MsgObject*>  MSG_OBJECT_MAP;
 typedef std::vector<MsgBuffer_Info_t> MSG_BUFFER;
 
@@ -95,71 +96,75 @@ public:
     MsgObject(void);
     virtual ~MsgObject(void);
 
+    // 获取对象 ID
     obj_id_t id(void) const {return id_;}
 
+    // 消息收到时回调函数
     virtual int msg_handler(obj_id_t sender, const basic::WeJson &msg);
+    // 发送消息（不需要主动设置发送ID）
     int send_msg(obj_id_t recv_id, const basic::WeJson &msg);
 private:
-    obj_id_t id_;
+    obj_id_t id_; // 对象ID
 
-public:
+public: // 下面是观察者模式的相关模式
+// 创建和删除主题
+// 消息对象可以订阅对应主题
+// 主题的创建者通过主题发布消息，订阅该主题的对象都能收到该消息
+
+    // 创建主题
+    int create_topic(const std::string &topic);
+    // 删除主题
+    int delete_topic(const std::string &topic);
+    // 发布消息
+    int publish_msg(const std::string &topic, const basic::WeJson &msg);
+
+    // 订阅主题
+    int subscribe_to_topic(const std::string &topic); 
+    // 取消订阅
+    int unsubscribe_topic(const std::string &topic);
+
+private:
+    std::list<std::string> topic_;// 当前对象创建的主题
+    static SUBSCRIBE_TOPIC_OBJECTS_MAP subscribe_object_; // 所有主题以及订阅主题的对象
+
+public: 
+// 下面的是消息处理的相关函数
+// 处理消息转发启动和停止，消息对象注册和注销
+// 当得知接受者的对象id时，可以通过对象id发送消息
+
+    // 检查对象 ID 是否存在
     static bool check_id(const obj_id_t &id);
+    // 发送消息
     static int send_msg(obj_id_t recv_id, const basic::WeJson &msg, obj_id_t sender_id = INVALID_ID);
 
 private:
+    // 开启消息处理
     static int start(void);
-    static int stop(void) {is_running = false;};
+    // 停止消息处理
+    static int stop(void) {is_running = false;}
+    // 生成新的对象id
     static obj_id_t next_id(void);
 
+    // 注册对象类
     static int register_object(MsgObject *obj_ptr);
+    // 移除对象类
     static int remove_object(const obj_id_t &id);
 
+    // 消息转发中心
     static void* message_forwarding_center(void *arg);
 
 private:
     static bool is_running;
     static obj_id_t next_object_id_;
 
+    // 注册的消息对象
     static os::Mutex obj_lock_;
     static MSG_OBJECT_MAP objects_;
 
+    // 消息缓冲区
     static os::ThreadPool msg_handle_pool_;
-
-    static MSG_BUFFER msg_buffer_;;
+    static MSG_BUFFER msg_buffer_;
 };
-
-
-///////////////////////////// 观察者模式 //////////////////////////////////////////////////////
-typedef void* (*MsgRecv_CallBack_t)(basic::WeJson msg);
-struct MsgBusUser {
-    std::string topic;                  // 订阅的消息主题
-    MsgRecv_CallBack_t msg_handler;     // 消息接受函数
-};
-
-class MsgBus {
-    typedef std::map<std::string, ds::Queue<basic::WeJson>> MSG_BUFFER_CENTER;
-public:
-    MsgBus(void);
-    virtual ~MsgBus(void);
-
-    // 创建主题
-    virtual int create_topic(const std::string &topic);
-    // 删除主题
-    virtual int delete_topic(const std::string &topic);
-    // 发布消息
-    virtual int publish_msg(const basic::WeJson &msg);
-
-private:
-    std::vector<std::string> publisher_;      // 创建的主题
-    std::vector<std::string> subscriber_;     // 订阅的主题
-
-    uint32_t handle_;
-private:
-    static os::ThreadPool msg_handle_pool_; 
-    static MSG_BUFFER_CENTER msg_buffer_; // 发布消息的缓冲区
-};
-
-
 } // namespace util
 
 
