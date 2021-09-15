@@ -1,4 +1,5 @@
 #include "util.h"
+#include "protocol/protocol.h"
 
 using namespace os;
 
@@ -20,21 +21,21 @@ MsgObject::check_id(const obj_id_t &id)
 }
 
 int 
-MsgObject::send_msg(obj_id_t recv_id, const basic::WeJson &msg, obj_id_t sender_id)
+MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, obj_id_t sender_id)
 {
-    if (check_id(recv_id) == false) {
+    if (check_id(recv_id) == false || msg.data_size() >= MAX_MSG_SIZE) {
         return -1;
     }
-
-    basic::WeJson send_msg;
-    send_msg.create_object();
-    send_msg.get_object().add(RECEIVER_OBJECT_ID, (int)recv_id);
-    send_msg.get_object().add(SENDER_OBJECT_ID, (int)sender_id);
-    send_msg.get_object().add(MSG_CONTENT, msg);
     
+    msg.
+
+    basic::ByteBuffer ws_ptl;
+    ptl::WebsocketPtl ptl;
+    ptl.generate();
+
     int choose_queue_num = recv_id % MAX_HANDER_THREAD; // 确定数据所放的队列中
     msg_buffer_[choose_queue_num].mutex.lock();
-    msg_buffer_[choose_queue_num].queue.push(send_msg);
+    msg_buffer_[choose_queue_num].buffer += msg;
     msg_buffer_[choose_queue_num].mutex.unlock();
 
     return 0;
@@ -129,7 +130,7 @@ MsgObject::message_forwarding_center(void *arg)
 
     MsgBuffer_Info_t *msg_queue = reinterpret_cast<MsgBuffer_Info_t*>(arg);
     while (is_running) {
-        if (msg_queue->queue.size() > 0) { // TODO: 处理消息转发
+        if (msg_queue->queue.size() > 0) {
             basic::WeJson msg;
             msg_queue->mutex.lock();
             if (msg_queue->queue.pop(msg) == 0) {
@@ -175,14 +176,108 @@ MsgObject::~MsgObject(void)
 }
 
 int 
-MsgObject::msg_handler(obj_id_t sender, const basic::WeJson &msg)
+MsgObject::msg_handler(obj_id_t sender, const basic::ByteBuffer &msg)
 {
     return 0;
 }
 
-int MsgObject::send_msg(obj_id_t recv_id, const basic::WeJson &msg)
+int MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, MsgType msg_type)
 {
     return MsgObject::send_msg(recv_id, msg, id_);
+}
+
+//////////////////////// 观察者模式 ///////////////////////////////////
+int 
+MsgObject::create_topic(const std::string &topic)
+{
+    if (topic_.find(topic) != topic_.end()) {
+        return -1;
+    }
+
+    if (subscribe_object_.find(topic) != subscribe_object_.end()) {
+        return -1;
+    }
+
+    topic_.insert(topic);
+    lock_.lock();
+    subscribe_object_[topic] = std::pair<obj_id_t, std::set<obj_id_t>>(id_, std::set<obj_id_t>());
+    lock_.unlock();
+    return 0;
+}
+
+int 
+MsgObject::delete_topic(const std::string &topic)
+{
+    auto topic_iter = topic_.find(topic);
+    if (topic_iter != topic_.end()) {
+        topic_.erase(topic_iter);
+    }
+
+    auto subscribe_iter = subscribe_object_.find(topic);
+    if (subscribe_iter != subscribe_object_.end()) {
+        lock_.lock();
+        subscribe_object_.erase(subscribe_iter);
+        lock_.unlock();
+    }
+
+    return 0;
+}
+
+int 
+MsgObject::publish_msg(const std::string &topic, const basic::WeJson &msg)
+{
+    auto subscribe_iter = subscribe_object_.find(topic);
+    if (subscribe_iter == subscribe_object_.end()) {
+        return -1;
+    }
+
+    int sum = 0;
+    for (auto iter = subscribe_iter->second.second.begin(); iter != subscribe_iter->second.second.end(); ++iter) {
+        int ret = MsgObject::send_msg(*iter, msg, id_);
+        if (ret >= 0) {
+            ++sum;
+        }
+    }
+
+    return sum;
+}
+
+int 
+MsgObject::subscribe_to_topic(const std::string &topic)
+{
+    auto subscribe_iter = subscribe_object_.find(topic);
+    if (subscribe_iter == subscribe_object_.end()) {
+        return -1;
+    }
+
+    subscribe_iter->second.second.insert(id_);
+    return 0;
+}
+
+int 
+MsgObject::unsubscribe_topic(const std::string &topic)
+{
+    auto subscribe_iter = subscribe_object_.find(topic);
+    if (subscribe_iter == subscribe_object_.end()) {
+        return 0;
+    }
+
+    auto obj_iter = subscribe_iter->second.second.find(id_);
+    if (obj_iter != subscribe_iter->second.second.end()) {
+        subscribe_iter->second.second.erase(obj_iter);
+    }
+    return 0;
+}
+
+obj_id_t 
+MsgObject::get_topic_publisher(const std::string &topic)
+{
+    auto subscribe_iter = subscribe_object_.find(topic);
+    if (subscribe_iter == subscribe_object_.end()) {
+        return INVALID_ID;
+    }
+
+    return subscribe_iter->second.first;
 }
 
 }

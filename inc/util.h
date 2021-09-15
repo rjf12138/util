@@ -72,22 +72,28 @@ private:
 };
 
 /////////////////////////// 消息总线 ////////////////////////////////////////////////
-// TODO: 不支持二进制数据
+// TODO: 当前不支持二进制数据传输
 #define INVALID_ID  0
 
 #define RECEIVER_OBJECT_ID  "recv_id"
 #define SENDER_OBJECT_ID    "sender_id"
 #define MSG_CONTENT         "msg_content"
 
+#define MAX_MSG_SIZE        250 * 1024 * 1024 // 消息最大不能超过250M
 #define MAX_HANDER_THREAD   4
 
+enum MsgType {
+    MsgType_Text = 1,
+    MsgType_Binary = 2
+};
+
 typedef struct MsgBuffer_Info {
-    ds::Queue<basic::WeJson> queue;
+    basic::ByteBuffer buffer;
     os::Mutex mutex;
 } MsgBuffer_Info_t;
 
 typedef uint32_t obj_id_t;
-typedef std::map<std::string, std::list<obj_id_t>>  SUBSCRIBE_TOPIC_OBJECTS_MAP;
+typedef std::map<std::string, std::pair<obj_id_t, std::set<obj_id_t>>>  SUBSCRIBE_TOPIC_OBJECTS_MAP;
 typedef std::map<int, MsgObject*>  MSG_OBJECT_MAP;
 typedef std::vector<MsgBuffer_Info_t> MSG_BUFFER;
 
@@ -100,13 +106,19 @@ public:
     obj_id_t id(void) const {return id_;}
 
     // 消息收到时回调函数
-    virtual int msg_handler(obj_id_t sender, const basic::WeJson &msg);
+    virtual int msg_handler(obj_id_t sender, const basic::ByteBuffer &msg);
     // 发送消息（不需要主动设置发送ID）
-    int send_msg(obj_id_t recv_id, const basic::WeJson &msg);
+    int send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg);
+
+    // 检查对象 ID 是否存在
+    static bool check_id(const obj_id_t &id);
+    // 发送消息
+    static int send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, obj_id_t sender_id = INVALID_ID);
 private:
     obj_id_t id_; // 对象ID
 
-public: // 下面是观察者模式的相关模式
+public: 
+// 下面是观察者模式的相关模式
 // 创建和删除主题
 // 消息对象可以订阅对应主题
 // 主题的创建者通过主题发布消息，订阅该主题的对象都能收到该消息
@@ -116,27 +128,24 @@ public: // 下面是观察者模式的相关模式
     // 删除主题
     int delete_topic(const std::string &topic);
     // 发布消息
-    int publish_msg(const std::string &topic, const basic::WeJson &msg);
+    int publish_msg(const std::string &topic, const basic::ByteBuffer &msg);
 
     // 订阅主题
-    int subscribe_to_topic(const std::string &topic); 
+    int subscribe_to_topic(const std::string &topic);
     // 取消订阅
     int unsubscribe_topic(const std::string &topic);
 
+    // 获取主题的发布者
+    obj_id_t get_topic_publisher(const std::string &topic);
+
 private:
-    std::list<std::string> topic_;// 当前对象创建的主题
+    std::set<std::string> topic_;// 当前对象创建的主题
+    static os::Mutex lock_;
     static SUBSCRIBE_TOPIC_OBJECTS_MAP subscribe_object_; // 所有主题以及订阅主题的对象
 
-public: 
-// 下面的是消息处理的相关函数
+// 消息转发以及对象ID维护的相关函数
 // 处理消息转发启动和停止，消息对象注册和注销
 // 当得知接受者的对象id时，可以通过对象id发送消息
-
-    // 检查对象 ID 是否存在
-    static bool check_id(const obj_id_t &id);
-    // 发送消息
-    static int send_msg(obj_id_t recv_id, const basic::WeJson &msg, obj_id_t sender_id = INVALID_ID);
-
 private:
     // 开启消息处理
     static int start(void);
