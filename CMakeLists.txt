@@ -17,13 +17,18 @@ target_compile_options(util_compiler_flags INTERFACE
 		$<${msvc_cxx}:$<BUILD_INTERFACE:-W3>>)
 
 # 设置生成文件输出路径
-set(LIBRARY_OUTPUT_PATH, ./output/debug/lib)
-add_library(util STATIC "")
+set(EXECUTABLE_OUTPUT_PATH, ./output/debug/bin)
+add_executable(util ./main/Test_MsgBus.cc)
 
 target_include_directories(util PUBLIC ./inc/)
 target_include_directories(util PRIVATE ./extern_inc/)
 
 target_link_directories(util PRIVATE ./lib/debug/)
 
+target_link_libraries(util PRIVATE gtest)
+target_link_libraries(util PRIVATE protocold)
+target_link_libraries(util PRIVATE systemd)
+target_link_libraries(util PRIVATE basicd)
+target_link_libraries(util PRIVATE pthread)
 include(src/CMakeLists.txt)
 

@@ -32,9 +32,9 @@ public:
     // 设置http回应头
     int set_response(int code, const std::string &phrase);
     // 设置回应消息短语
-    int set_phrase(std::string phrase);
+    int set_phrase(const std::string &phrase);
     // 设置报文主体内容
-    int set_content(basic::ByteBuffer &data);
+    int set_content(const basic::ByteBuffer &data);
     // 设置头选项
     int set_header_option(const std::string &key, const std::string &value);
 

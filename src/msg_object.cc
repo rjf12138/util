@@ -3,13 +3,23 @@
 
 using namespace os;
 
+// 内部自定义HTTP消息头
+#define HTTP_RECEIVER_OBJECT_ID   "Receiver-ID"
+#define HTTP_SENDER_OBJECT_ID    "Sender-ID"
+
 namespace util
 {
 bool MsgObject::is_running = false;
 obj_id_t MsgObject::next_object_id_ = 0;
 
-MSG_OBJECT_MAP MsgObject::objects_;
+os::Mutex MsgObject::topic_lock_;
+MsgObject::SUBSCRIBE_TOPIC_OBJECTS_MAP MsgObject::subscribe_object_;
+
+os::Mutex MsgObject::obj_lock_;
+MsgObject::MSG_OBJECT_MAP MsgObject::objects_;
 os::ThreadPool MsgObject::msg_handle_pool_;
+
+MsgObject::MSG_BUFFER MsgObject::msg_buffer_;
 
 bool 
 MsgObject::check_id(const obj_id_t &id)
@@ -26,12 +36,14 @@ MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, obj_id_t sen
     if (check_id(recv_id) == false || msg.data_size() >= MAX_MSG_SIZE) {
         return -1;
     }
-    
-    msg.
 
-    basic::ByteBuffer ws_ptl;
-    ptl::WebsocketPtl ptl;
-    ptl.generate();
+    basic::ByteBuffer ptl_content;
+    ptl::HttpPtl ptl;
+    ptl.set_request(HTTP_METHOD_POST, "/");
+    ptl.set_header_option(HTTP_RECEIVER_OBJECT_ID, std::to_string(recv_id));
+    ptl.set_header_option(HTTP_SENDER_OBJECT_ID, std::to_string(sender_id));
+    ptl.set_content(msg);
+    ptl.generate(ptl_content);
 
     int choose_queue_num = recv_id % MAX_HANDER_THREAD; // 确定数据所放的队列中
     msg_buffer_[choose_queue_num].mutex.lock();
@@ -58,7 +70,7 @@ MsgObject::start(void)
 
     os::Task task;
     task.work_func = message_forwarding_center;
-    task.exit_task = [](void*)->void*{is_running = false;};//exit_msg_center;
+    task.exit_task = [](void*)->void*{is_running = false;return nullptr;};//exit_msg_center;
 
     for (int i = 0; i < MAX_HANDER_THREAD; ++i) {
         MsgBuffer_Info_t info;
@@ -128,37 +140,38 @@ MsgObject::message_forwarding_center(void *arg)
         return nullptr;
     }
 
+    ptl::HttpPtl ptl;
     MsgBuffer_Info_t *msg_queue = reinterpret_cast<MsgBuffer_Info_t*>(arg);
     while (is_running) {
-        if (msg_queue->queue.size() > 0) {
-            basic::WeJson msg;
-            msg_queue->mutex.lock();
-            if (msg_queue->queue.pop(msg) == 0) {
-                continue;
-            }
-            msg_queue->mutex.unlock();
+        msg_queue->mutex.lock();
+        ptl::HttpParse_ErrorCode err_code = ptl.parser(msg_queue->buffer);
+        msg_queue->mutex.unlock();
+        if (err_code == ptl::HttpParse_OK) {
+            obj_id_t sender_id = std::stoul(ptl.get_header_option(HTTP_SENDER_OBJECT_ID));
+            obj_id_t recv_id = std::stoul(ptl.get_header_option(HTTP_RECEIVER_OBJECT_ID));
 
-            JsonObject &jsobj = msg.get_object();
-            if (jsobj.find(RECEIVER_OBJECT_ID) != jsobj.end()) {
-                JsonNumber js_sender_id = jsobj[SENDER_OBJECT_ID];
-                obj_id_t sender_id = static_cast<obj_id_t>(js_sender_id.to_int());
-
-                JsonNumber js_recv_id = jsobj[RECEIVER_OBJECT_ID];
-                obj_id_t recv_id = static_cast<obj_id_t>(js_recv_id.to_int());
-
-                auto find_iter = objects_.find(recv_id);
-                if (find_iter != objects_.end()) {
-                    if (find_iter->second != nullptr) {
-                        find_iter->second->msg_handler(sender_id, jsobj[MSG_CONTENT]);
-                    }
+            auto find_iter = objects_.find(recv_id);
+            if (find_iter != objects_.end()) {
+                if (find_iter->second != nullptr) {
+                    basic::ByteBuffer content;
+                    ptl.get_content(content);
+                    find_iter->second->msg_handler(sender_id, content);
                 }
             }
+        } else {
+            // 当消息解析错误时清空所有缓存
+            msg_queue->mutex.lock();
+            msg_queue->buffer.clear();
+            msg_queue->mutex.unlock();
         }
+        ptl.clear();
         Time::sleep(10);
     }
+
+    return nullptr;
 }
 
-
+// 消息对象对外接口
 MsgObject::MsgObject(void)
 {
     // 初始化消息总线系统
@@ -181,7 +194,7 @@ MsgObject::msg_handler(obj_id_t sender, const basic::ByteBuffer &msg)
     return 0;
 }
 
-int MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, MsgType msg_type)
+int MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg)
 {
     return MsgObject::send_msg(recv_id, msg, id_);
 }
@@ -199,9 +212,9 @@ MsgObject::create_topic(const std::string &topic)
     }
 
     topic_.insert(topic);
-    lock_.lock();
+    topic_lock_.lock();
     subscribe_object_[topic] = std::pair<obj_id_t, std::set<obj_id_t>>(id_, std::set<obj_id_t>());
-    lock_.unlock();
+    topic_lock_.unlock();
     return 0;
 }
 
@@ -215,16 +228,16 @@ MsgObject::delete_topic(const std::string &topic)
 
     auto subscribe_iter = subscribe_object_.find(topic);
     if (subscribe_iter != subscribe_object_.end()) {
-        lock_.lock();
+        topic_lock_.lock();
         subscribe_object_.erase(subscribe_iter);
-        lock_.unlock();
+        topic_lock_.unlock();
     }
 
     return 0;
 }
 
 int 
-MsgObject::publish_msg(const std::string &topic, const basic::WeJson &msg)
+MsgObject::publish_msg(const std::string &topic, const basic::ByteBuffer &msg)
 {
     auto subscribe_iter = subscribe_object_.find(topic);
     if (subscribe_iter == subscribe_object_.end()) {

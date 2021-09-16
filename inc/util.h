@@ -71,7 +71,7 @@ private:
     ds::MinHeap<TimerEvent_t> timer_heap_;
 };
 
-/////////////////////////// 消息总线 ////////////////////////////////////////////////
+/////////////////////////// 消息对象 ////////////////////////////////////////////////
 // TODO: 当前不支持二进制数据传输
 #define INVALID_ID  0
 
@@ -93,11 +93,11 @@ typedef struct MsgBuffer_Info {
 } MsgBuffer_Info_t;
 
 typedef uint32_t obj_id_t;
-typedef std::map<std::string, std::pair<obj_id_t, std::set<obj_id_t>>>  SUBSCRIBE_TOPIC_OBJECTS_MAP;
-typedef std::map<int, MsgObject*>  MSG_OBJECT_MAP;
-typedef std::vector<MsgBuffer_Info_t> MSG_BUFFER;
 
 class MsgObject {
+    typedef std::map<int, MsgObject*>  MSG_OBJECT_MAP;
+    typedef std::map<std::string, std::pair<obj_id_t, std::set<obj_id_t>>>  SUBSCRIBE_TOPIC_OBJECTS_MAP;
+    typedef std::vector<MsgBuffer_Info_t> MSG_BUFFER;
 public:
     MsgObject(void);
     virtual ~MsgObject(void);
@@ -113,7 +113,7 @@ public:
     // 检查对象 ID 是否存在
     static bool check_id(const obj_id_t &id);
     // 发送消息
-    static int send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, obj_id_t sender_id = INVALID_ID);
+    static int send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, obj_id_t sender_id);
 private:
     obj_id_t id_; // 对象ID
 
@@ -140,7 +140,7 @@ public:
 
 private:
     std::set<std::string> topic_;// 当前对象创建的主题
-    static os::Mutex lock_;
+    static os::Mutex topic_lock_;
     static SUBSCRIBE_TOPIC_OBJECTS_MAP subscribe_object_; // 所有主题以及订阅主题的对象
 
 // 消息转发以及对象ID维护的相关函数
@@ -150,7 +150,7 @@ private:
     // 开启消息处理
     static int start(void);
     // 停止消息处理
-    static int stop(void) {is_running = false;}
+    static void stop(void) {is_running = false;}
     // 生成新的对象id
     static obj_id_t next_id(void);
 
