@@ -16,6 +16,7 @@ public:
 
     virtual int msg_handler(obj_id_t sender, const basic::ByteBuffer &msg) {
         recv_msg_ = msg;
+        std::cout << "MsgTest_A: " <<  recv_msg_.str() << std::endl;
         sender_id_ = sender;
         return 0;
     }
@@ -32,6 +33,7 @@ public:
 
     virtual int msg_handler(obj_id_t sender, const basic::ByteBuffer &msg) {
         recv_msg_ = msg;
+        std::cout << "MsgTest_B: " << recv_msg_.str() << std::endl;
         sender_id_ = sender;
         return 0;
     }

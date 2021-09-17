@@ -97,7 +97,7 @@ typedef uint32_t obj_id_t;
 class MsgObject {
     typedef std::map<int, MsgObject*>  MSG_OBJECT_MAP;
     typedef std::map<std::string, std::pair<obj_id_t, std::set<obj_id_t>>>  SUBSCRIBE_TOPIC_OBJECTS_MAP;
-    typedef std::vector<MsgBuffer_Info_t> MSG_BUFFER;
+    typedef std::vector<MsgBuffer_Info_t*> MSG_BUFFER;
 public:
     MsgObject(void);
     virtual ~MsgObject(void);
@@ -150,7 +150,7 @@ private:
     // 开启消息处理
     static int start(void);
     // 停止消息处理
-    static void stop(void) {is_running = false;}
+    static void* stop(void* arg) {is_running = false; return nullptr;}
     // 生成新的对象id
     static obj_id_t next_id(void);
 

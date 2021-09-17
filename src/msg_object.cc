@@ -1,8 +1,6 @@
 #include "util.h"
 #include "protocol/protocol.h"
 
-using namespace os;
-
 // 内部自定义HTTP消息头
 #define HTTP_RECEIVER_OBJECT_ID   "Receiver-ID"
 #define HTTP_SENDER_OBJECT_ID    "Sender-ID"
@@ -33,6 +31,10 @@ MsgObject::check_id(const obj_id_t &id)
 int 
 MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, obj_id_t sender_id)
 {
+    if (is_running == false) {
+        return -1;
+    }
+
     if (check_id(recv_id) == false || msg.data_size() >= MAX_MSG_SIZE) {
         return -1;
     }
@@ -46,9 +48,9 @@ MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, obj_id_t sen
     ptl.generate(ptl_content);
 
     int choose_queue_num = recv_id % MAX_HANDER_THREAD; // 确定数据所放的队列中
-    msg_buffer_[choose_queue_num].mutex.lock();
-    msg_buffer_[choose_queue_num].buffer += msg;
-    msg_buffer_[choose_queue_num].mutex.unlock();
+    msg_buffer_[choose_queue_num]->mutex.lock();
+    msg_buffer_[choose_queue_num]->buffer += msg;
+    msg_buffer_[choose_queue_num]->mutex.unlock();
 
     return 0;
 }
@@ -59,24 +61,23 @@ MsgObject::start(void)
     if (is_running == true) {
         return 0;
     }
-
     is_running = true;
 
     std::size_t min_thread = MAX_HANDER_THREAD;
     std::size_t max_thread = MAX_HANDER_THREAD;
-    ThreadPoolConfig config = {min_thread, max_thread, 30, 60, SHUTDOWN_ALL_THREAD_IMMEDIATELY};
+    os::ThreadPoolConfig config = {min_thread, max_thread, 30, 60, os::SHUTDOWN_ALL_THREAD_IMMEDIATELY};
     msg_handle_pool_.set_threadpool_config(config);
     msg_handle_pool_.init();
 
     os::Task task;
     task.work_func = message_forwarding_center;
-    task.exit_task = [](void*)->void*{is_running = false;return nullptr;};//exit_msg_center;
+    task.exit_task = MsgObject::stop;//exit_msg_center;
 
     for (int i = 0; i < MAX_HANDER_THREAD; ++i) {
-        MsgBuffer_Info_t info;
-        msg_buffer_.push_back(info);
+        MsgBuffer_Info_t *info_ptr = new MsgBuffer_Info_t;;
+        msg_buffer_.push_back(info_ptr);
 
-        task.thread_arg = &msg_buffer_[i];
+        task.thread_arg = info_ptr;
         msg_handle_pool_.add_task(task);
     }
 
@@ -165,9 +166,10 @@ MsgObject::message_forwarding_center(void *arg)
             msg_queue->mutex.unlock();
         }
         ptl.clear();
-        Time::sleep(10);
+        os::Time::sleep(10);
     }
-
+    delete msg_queue;
+    
     return nullptr;
 }
 
@@ -184,7 +186,7 @@ MsgObject::~MsgObject(void)
 {
     MsgObject::remove_object(id_);
     if (objects_.size() == 0) {
-        MsgObject::stop();
+        MsgObject::stop(nullptr);
     }
 }
 
