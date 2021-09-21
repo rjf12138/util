@@ -163,6 +163,7 @@ private:
     static void* message_forwarding_center(void *arg);
 
 private:
+    static os::Mutex run_lock_; 
     static bool is_running;
     static obj_id_t next_object_id_;
 
@@ -173,6 +174,9 @@ private:
     // 消息缓冲区
     static os::ThreadPool msg_handle_pool_;
     static MSG_BUFFER msg_buffer_;
+
+public:
+    static uint64_t time_count;
 };
 } // namespace util
 

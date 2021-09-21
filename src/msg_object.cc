@@ -7,6 +7,7 @@
 
 namespace util
 {
+os::Mutex MsgObject::run_lock_;
 bool MsgObject::is_running = false;
 obj_id_t MsgObject::next_object_id_ = 0;
 
@@ -18,6 +19,8 @@ MsgObject::MSG_OBJECT_MAP MsgObject::objects_;
 os::ThreadPool MsgObject::msg_handle_pool_;
 
 MsgObject::MSG_BUFFER MsgObject::msg_buffer_;
+
+uint64_t MsgObject::time_count = 0;
 
 bool 
 MsgObject::check_id(const obj_id_t &id)
@@ -49,7 +52,7 @@ MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, obj_id_t sen
 
     int choose_queue_num = recv_id % MAX_HANDER_THREAD; // 确定数据所放的队列中
     msg_buffer_[choose_queue_num]->mutex.lock();
-    msg_buffer_[choose_queue_num]->buffer += msg;
+    msg_buffer_[choose_queue_num]->buffer += ptl_content;
     msg_buffer_[choose_queue_num]->mutex.unlock();
 
     return 0;
@@ -58,10 +61,13 @@ MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, obj_id_t sen
 int 
 MsgObject::start(void)
 {
+    run_lock_.lock();
     if (is_running == true) {
+        run_lock_.unlock();
         return 0;
     }
     is_running = true;
+    run_lock_.unlock();
 
     std::size_t min_thread = MAX_HANDER_THREAD;
     std::size_t max_thread = MAX_HANDER_THREAD;
@@ -74,7 +80,7 @@ MsgObject::start(void)
     task.exit_task = MsgObject::stop;//exit_msg_center;
 
     for (int i = 0; i < MAX_HANDER_THREAD; ++i) {
-        MsgBuffer_Info_t *info_ptr = new MsgBuffer_Info_t;;
+        MsgBuffer_Info_t *info_ptr = new MsgBuffer_Info_t;
         msg_buffer_.push_back(info_ptr);
 
         task.thread_arg = info_ptr;
@@ -145,7 +151,10 @@ MsgObject::message_forwarding_center(void *arg)
     MsgBuffer_Info_t *msg_queue = reinterpret_cast<MsgBuffer_Info_t*>(arg);
     while (is_running) {
         msg_queue->mutex.lock();
+        os::Time t;
+        uint64_t start = t.now();
         ptl::HttpParse_ErrorCode err_code = ptl.parser(msg_queue->buffer);
+        time_count += (t.now() - start);
         msg_queue->mutex.unlock();
         if (err_code == ptl::HttpParse_OK) {
             obj_id_t sender_id = std::stoul(ptl.get_header_option(HTTP_SENDER_OBJECT_ID));
@@ -168,7 +177,7 @@ MsgObject::message_forwarding_center(void *arg)
         ptl.clear();
         os::Time::sleep(10);
     }
-    delete msg_queue;
+    delete msg_queue; // 释放分配的内存
     
     return nullptr;
 }
@@ -179,7 +188,9 @@ MsgObject::MsgObject(void)
     // 初始化消息总线系统
     MsgObject::start();
 
+    // 生成对象ID并注册
     id_ = MsgObject::next_id();
+    MsgObject::register_object(this);
 }
 
 MsgObject::~MsgObject(void)

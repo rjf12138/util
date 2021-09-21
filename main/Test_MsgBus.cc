@@ -11,36 +11,69 @@ namespace {
 // 创建消息测试类
 class MsgTest_A : public MsgObject {
 public:
-    MsgTest_A(void) {}
+    MsgTest_A(void) {
+        std::cout << "MsgTest_A_ID: " << id() << std::endl;
+        clear();
+    }
     ~MsgTest_A(void) {}
 
+    void clear(void) {
+        is_ok = true;
+        recv_msg_.clear();
+        sender_id_ = INVALID_ID;
+        recv_count = 0;
+    }
+
     virtual int msg_handler(obj_id_t sender, const basic::ByteBuffer &msg) {
-        recv_msg_ = msg;
-        std::cout << "MsgTest_A: " <<  recv_msg_.str() << std::endl;
-        sender_id_ = sender;
+        if (is_ok == true) {
+            if (sender == sender_id_ && msg == recv_msg_) {
+                ++recv_count;
+            } else {
+                is_ok = false;
+            }
+        }
         return 0;
     }
 
 public:
+    bool is_ok = true;
     basic::ByteBuffer recv_msg_;
     obj_id_t sender_id_;
+
+    int recv_count = 0;
 };
 
 class MsgTest_B : public MsgObject {
 public:
-    MsgTest_B(void) {}
+    MsgTest_B(void) {
+        std::cout << "MsgTest_B_ID: " << id() << std::endl;
+    }
     ~MsgTest_B(void) {}
 
+    void clear(void) {
+        is_ok = true;
+        recv_msg_.clear();
+        sender_id_ = INVALID_ID;
+        recv_count = 0;
+    }
+
     virtual int msg_handler(obj_id_t sender, const basic::ByteBuffer &msg) {
-        recv_msg_ = msg;
-        std::cout << "MsgTest_B: " << recv_msg_.str() << std::endl;
-        sender_id_ = sender;
+        if (is_ok == true) {
+            if (sender == sender_id_ && msg == recv_msg_) {
+                ++recv_count;
+            } else {
+                is_ok = false;
+            }
+        }
         return 0;
     }
     
 public:
+    bool is_ok = true;
     basic::ByteBuffer recv_msg_;
     obj_id_t sender_id_;
+
+    int recv_count = 0;
 };
 
 class MsgBusTest : public ::testing::Test {
@@ -62,23 +95,37 @@ TEST_F(MsgBusTest, SingleThreadSendAndRecv)
     MsgTest_A msg_A;
     MsgTest_B msg_B;
 
-    std::string msg = "Hello, world!-----1";
-    send_msg_data.write_string(msg);
-    msg_A.send_msg(msg_B.id(), send_msg_data);
+    // 单个测试
+    msg_B.sender_id_ = msg_A.id();
+    msg_B.recv_msg_.write_string("Hello, world!-----1");
+    msg_A.send_msg(msg_B.id(), msg_B.recv_msg_);
 
-    os::Time::sleep(100);
-    ASSERT_EQ(send_msg_data, msg_B.recv_msg_);
-    ASSERT_EQ(msg_A.id(), msg_B.sender_id_);
+    os::Time::sleep(30);
+    ASSERT_EQ(msg_B.is_ok, true);
+    ASSERT_EQ(msg_B.recv_count, 1);
 
+    msg_A.sender_id_ = msg_B.id();
+    msg_A.recv_msg_.write_string("Hello, world!-----2");
+    msg_B.send_msg(msg_A.id(), msg_A.recv_msg_);
 
-    send_msg_data.clear();
-    msg = "Hello, world!-----2";
-    send_msg_data.write_string(msg);
-    msg_B.send_msg(msg_A.id(), send_msg_data);
+    os::Time::sleep(30);
+    ASSERT_EQ(msg_A.is_ok, true);
+    ASSERT_EQ(msg_A.recv_count, 1);
 
-    os::Time::sleep(100);
-    ASSERT_EQ(send_msg_data, msg_A.recv_msg_);
-    ASSERT_EQ(msg_A.id(), msg_A.sender_id_);
+    // 单个对象发送多条消息
+    msg_A.clear();
+    msg_B.clear();
+    msg_A.sender_id_ = msg_B.id();
+    msg_A.recv_msg_.write_string("Hello, world!-----1");
+    for (int i = 0; i < 5000; ++i) {
+        msg_B.send_msg(msg_A.id(), msg_A.recv_msg_);
+    }
+
+    os::Time::sleep(50000);
+    EXPECT_EQ(msg_A.is_ok, true);
+    EXPECT_EQ(msg_A.recv_count, 5000);
+
+    std::cout << "time count: " << MsgObject::time_count << std::endl;
 }
 
 }
