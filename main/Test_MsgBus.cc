@@ -120,8 +120,8 @@ TEST_F(MsgBusTest, SingleThreadSendAndRecv)
     for (int i = 0; i < 5000; ++i) {
         msg_B.send_msg(msg_A.id(), msg_A.recv_msg_);
     }
-
-    os::Time::sleep(50000);
+    // TODO: 优化传输性能。
+    os::Time::sleep(10000);
     EXPECT_EQ(msg_A.is_ok, true);
     EXPECT_EQ(msg_A.recv_count, 5000);
 

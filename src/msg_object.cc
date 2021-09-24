@@ -153,7 +153,7 @@ MsgObject::message_forwarding_center(void *arg)
         msg_queue->mutex.lock();
         os::Time t;
         uint64_t start = t.now();
-        ptl::HttpParse_ErrorCode err_code = ptl.parser(msg_queue->buffer);
+        ptl::HttpParse_ErrorCode err_code = ptl.parse(msg_queue->buffer);
         time_count += (t.now() - start);
         msg_queue->mutex.unlock();
         if (err_code == ptl::HttpParse_OK) {
@@ -163,9 +163,7 @@ MsgObject::message_forwarding_center(void *arg)
             auto find_iter = objects_.find(recv_id);
             if (find_iter != objects_.end()) {
                 if (find_iter->second != nullptr) {
-                    basic::ByteBuffer content;
-                    ptl.get_content(content);
-                    find_iter->second->msg_handler(sender_id, content);
+                    find_iter->second->msg_handler(sender_id, ptl.get_content());
                 }
             }
         } else {
@@ -174,8 +172,7 @@ MsgObject::message_forwarding_center(void *arg)
             msg_queue->buffer.clear();
             msg_queue->mutex.unlock();
         }
-        ptl.clear();
-        os::Time::sleep(10);
+        os::Time::sleep(5);
     }
     delete msg_queue; // 释放分配的内存
     
