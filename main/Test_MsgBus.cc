@@ -172,6 +172,9 @@ TEST_F(MsgBusTest, MultiThreadSendAndRecv)
     os::Time::sleep(10000);
     EXPECT_EQ(msg_B.is_ok, true);
     EXPECT_EQ(msg_B.recv_count, 5000);
+
+    test_pool.stop_handler();
+    test_pool.wait_thread();
 }
 
 }
