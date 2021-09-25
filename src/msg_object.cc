@@ -20,8 +20,6 @@ os::ThreadPool MsgObject::msg_handle_pool_;
 
 MsgObject::MSG_BUFFER MsgObject::msg_buffer_;
 
-uint64_t MsgObject::time_count = 0;
-
 bool 
 MsgObject::check_id(const obj_id_t &id)
 {
@@ -150,11 +148,13 @@ MsgObject::message_forwarding_center(void *arg)
     ptl::HttpPtl ptl;
     MsgBuffer_Info_t *msg_queue = reinterpret_cast<MsgBuffer_Info_t*>(arg);
     while (is_running) {
+        if (msg_queue->buffer.data_size() == 0) {
+            os::Time::sleep(5);
+            continue;
+        }
+
         msg_queue->mutex.lock();
-        os::Time t;
-        uint64_t start = t.now();
         ptl::HttpParse_ErrorCode err_code = ptl.parse(msg_queue->buffer);
-        time_count += (t.now() - start);
         msg_queue->mutex.unlock();
         if (err_code == ptl::HttpParse_OK) {
             obj_id_t sender_id = std::stoul(ptl.get_header_option(HTTP_SENDER_OBJECT_ID));
@@ -172,7 +172,6 @@ MsgObject::message_forwarding_center(void *arg)
             msg_queue->buffer.clear();
             msg_queue->mutex.unlock();
         }
-        os::Time::sleep(5);
     }
     delete msg_queue; // 释放分配的内存
     

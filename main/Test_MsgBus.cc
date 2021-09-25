@@ -35,10 +35,23 @@ public:
         return 0;
     }
 
+    static void* msg_test_A_send_func(void *arg) {
+        if (arg == nullptr) {
+            return nullptr;
+        }
+
+        MsgTest_A *msg_test_ptr = (MsgTest_A*)arg;
+        msg_test_ptr->recv_msg_.write_string("Hello, world!-----1");
+        for (int i = 0; i < 5000; ++i) {
+            msg_test_ptr->send_msg(msg_test_ptr->multi_thread_recv_id_, msg_test_ptr->recv_msg_);
+        }
+        return nullptr;
+    }
 public:
     bool is_ok = true;
     basic::ByteBuffer recv_msg_;
     obj_id_t sender_id_;
+    obj_id_t multi_thread_recv_id_;
 
     int recv_count = 0;
 };
@@ -68,10 +81,23 @@ public:
         return 0;
     }
     
+    static void* msg_test_B_send_func(void *arg) {
+        if (arg == nullptr) {
+            return nullptr;
+        }
+
+        MsgTest_B *msg_test_ptr = (MsgTest_B*)arg;
+        msg_test_ptr->recv_msg_.write_string("Hello, world!-----1");
+        for (int i = 0; i < 5000; ++i) {
+            msg_test_ptr->send_msg(msg_test_ptr->multi_thread_recv_id_, msg_test_ptr->recv_msg_);
+        }
+        return nullptr;
+    }
 public:
     bool is_ok = true;
     basic::ByteBuffer recv_msg_;
     obj_id_t sender_id_;
+    obj_id_t multi_thread_recv_id_;
 
     int recv_count = 0;
 };
@@ -100,7 +126,7 @@ TEST_F(MsgBusTest, SingleThreadSendAndRecv)
     msg_B.recv_msg_.write_string("Hello, world!-----1");
     msg_A.send_msg(msg_B.id(), msg_B.recv_msg_);
 
-    os::Time::sleep(30);
+    os::Time::sleep(300);
     ASSERT_EQ(msg_B.is_ok, true);
     ASSERT_EQ(msg_B.recv_count, 1);
 
@@ -120,12 +146,32 @@ TEST_F(MsgBusTest, SingleThreadSendAndRecv)
     for (int i = 0; i < 5000; ++i) {
         msg_B.send_msg(msg_A.id(), msg_A.recv_msg_);
     }
-    // TODO: 优化传输性能。
+    
     os::Time::sleep(10000);
     EXPECT_EQ(msg_A.is_ok, true);
     EXPECT_EQ(msg_A.recv_count, 5000);
+}
 
-    std::cout << "time count: " << MsgObject::time_count << std::endl;
+TEST_F(MsgBusTest, MultiThreadSendAndRecv)
+{
+    basic::ByteBuffer send_msg_data;
+    MsgTest_A msg_A;
+    MsgTest_B msg_B;
+
+    msg_B.sender_id_ = msg_A.id();
+    msg_B.recv_msg_.write_string("Hello, world!-----1");
+    msg_A.multi_thread_recv_id_ = msg_B.id();
+
+    os::ThreadPool test_pool;
+    test_pool.init();
+    os::Task task;
+    task.work_func = MsgTest_A::msg_test_A_send_func;
+    task.thread_arg = &msg_A;
+    test_pool.add_task(task);
+
+    os::Time::sleep(10000);
+    EXPECT_EQ(msg_B.is_ok, true);
+    EXPECT_EQ(msg_B.recv_count, 5000);
 }
 
 }

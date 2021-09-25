@@ -174,9 +174,6 @@ private:
     // 消息缓冲区
     static os::ThreadPool msg_handle_pool_;
     static MSG_BUFFER msg_buffer_;
-
-public:
-    static uint64_t time_count;
 };
 } // namespace util
 
