@@ -13,15 +13,14 @@
 #include <ctime>
 #include <cstdarg>
 #include <map>
-#include <set>
 #include <memory>
 #include <queue>
 #include <utility>
 #include <regex>
 #include <csignal>
-#include <list>
+#include <set>
 
-using namespace std;
+//using namespace std;
 
 #if defined(_WIN32) || defined(_WIN64) || defined(__WIN32__) 
     #define __RJF_WINDOWS__
@@ -34,17 +33,21 @@ using namespace std;
 #include <pthread.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <setjmp.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/epoll.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
-#include <setjmp.h>
+#include <sys/time.h>
+#include <sys/sysinfo.h>
+
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #elif defined(__RJF_WINDOWS__)
-
+#include <window.h>
 #endif
 
 #endif

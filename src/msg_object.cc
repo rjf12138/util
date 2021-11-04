@@ -68,8 +68,7 @@ MsgObject::start(void)
     run_lock_.unlock();
 
     std::size_t min_thread = MAX_HANDER_THREAD;
-    std::size_t max_thread = MAX_HANDER_THREAD;
-    os::ThreadPoolConfig config = {min_thread, max_thread, 30, 60, os::SHUTDOWN_ALL_THREAD_IMMEDIATELY};
+    os::ThreadPoolConfig config = {min_thread, 500, os::SHUTDOWN_ALL_THREAD_IMMEDIATELY};
     msg_handle_pool_.set_threadpool_config(config);
     msg_handle_pool_.init();
 

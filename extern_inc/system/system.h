@@ -49,8 +49,11 @@ public:
     Time(void);
     ~Time(void);
 
+    // 设置时间
+    void set_time(mtime_t tm);
+
     // 获取当前时间
-    mtime_t now(void);
+    static mtime_t now(void);
     // 格式化当前时间
     std::string format(bool mills_enable = true, const char *fmt = DEFAULT_TIME_FMT);
 
@@ -68,7 +71,22 @@ public:
     static std::string convert_to(const mtime_t &ti, bool mills_enable = true, const char *fmt = DEFAULT_TIME_FMT);
 
 private:
+    Time(const Time&) = delete;
+    Time& operator=(const Time&) = delete;
+
+private:
     mtime_t time_;
+};
+/////////////////////////////// 获取系统信息 ////////////////////////////////////////
+class SystemInfo {
+public:
+    SystemInfo(void);
+    ~SystemInfo(void);
+
+    // 获取当前用户可以使用的 cpu 核心数 
+    static int get_nprocs(void);
+    // 获取 cpu 总的核心数
+    static int get_nprocs_conf(void);
 };
 
 /////////////////////////////// 互斥量 /////////////////////////////////////////////
@@ -81,13 +99,19 @@ public:
     virtual int trylock(void);
     virtual int unlock(void);
     virtual int get_errno(void) { return errno_;}
+
 #ifdef __RJF_LINUX__
-    pthread_mutex_t* get_mutex(void) {return &mutex_;}
+    pthread_mutex_t* get_mutex(void) {return mutex_ptr_;}
 #endif
+
+private:
+    Mutex(const Mutex&) = delete;
+    Mutex& operator=(const Mutex&) = delete;
+
 private:
     int errno_;
 #ifdef __RJF_LINUX__
-    pthread_mutex_t mutex_;
+    pthread_mutex_t *mutex_ptr_;
 #endif
 };
 
@@ -105,8 +129,8 @@ public:
     Thread(void);
     virtual ~Thread(void);
 
+    // 线程初始化
     virtual int init(void);
-    virtual int wait_thread(void);
 
     // 以下函数需要重载
     // 线程调用的主体
@@ -120,7 +144,13 @@ private:
     static void* create_func(void *arg);
 
 private:
+    Thread(const Thread&) = delete;
+    Thread& operator=(const Thread&) = delete;
+
+private:
+    bool is_init_;
 #ifdef __RJF_LINUX__
+    pthread_attr_t attr_;
     pthread_t thread_id_;
 #endif
 };
@@ -139,6 +169,13 @@ struct Task {
     void *exit_arg;
     thread_callback work_func;
     thread_callback exit_task;
+
+    Task()
+    :state(THREAD_TASK_WAIT),
+    thread_arg(nullptr),
+    exit_arg(nullptr),
+    work_func(nullptr),
+    exit_task(nullptr) {}
 };
 
 // thread_pool 的工作线程。
@@ -151,8 +188,8 @@ enum ThreadState {
 };
 
 class ThreadPool;
+typedef uint64_t thread_id_t;
 class WorkThread : public Thread {
-    friend ThreadPool;
 public:
     WorkThread(ThreadPool *thread_pool, int idle_life = 30);
     virtual ~WorkThread(void);
@@ -168,19 +205,22 @@ public:
     // 继续执行线程
     virtual int resume(void);
 
-    virtual int64_t get_thread_id(void) const {return thread_id_;}
+    virtual thread_id_t get_thread_id(void) const {return work_thread_id_;}
     virtual int get_current_state(void) const {return state_;}
-    virtual int idle_timeout(void);
-    virtual int reset_idle_life(void);
 
 private:
     void thread_cond_wait(void);
     void thread_cond_signal(void);
+
+private:
+    WorkThread(const WorkThread&) = delete;
+    WorkThread& operator=(const WorkThread&) = delete;
+
 private:
     time_t idle_life_; // 单位：秒
     time_t start_idle_life_;
     int state_;
-    int64_t thread_id_;
+    thread_id_t work_thread_id_;
 
     Task task_;
     Mutex mutex_;
@@ -201,10 +241,8 @@ enum ThreadPoolExitAction {
 };
 
 struct ThreadPoolConfig {
-    std::size_t min_thread_num;             // 最小线程数
-    std::size_t max_thread_num;             // 最大线程数
-    std::size_t max_waiting_task;           // 缓存中保存的最大任务数
-    int idle_thread_life;                   // 空闲线程的存在
+    std::size_t threads_num;             // 线程数
+    std::size_t max_waiting_task;        // 缓存中保存的最大任务数
     ThreadPoolExitAction threadpool_exit_action; // 默认时强制关闭所有线程
 };
 
@@ -237,11 +275,14 @@ public:
 
     // 设置最小的线程数量，当线程数量等于它时，线程即使超出它寿命依旧不杀死
     int set_threadpool_config(const ThreadPoolConfig &config);
+    // 获取线程池配置
     ThreadPoolConfig get_threadpool_config(void) const {return thread_pool_config_;}
-    // 打印线程池信息
-    std::string info(void);
+    
     // 获取线程运行状态
     ThreadPoolRunningInfo get_running_info(void);
+    // 实时打印当前线程池信息
+    void show_threadpool_info(void);
+
     // 获取线程池状态
     ThreadState get_state(void) {return state_;}
 
@@ -253,19 +294,22 @@ private:
     // 除了工作线程之外，其他任何代码都不要去调用该函数，否则会导致的任务丢失
     int get_task(Task &task);
 
-    // 移除已经关闭的工作线程信息
-    // 注意：使用时要确保线程已经结束了
-    int remove_thread(int64_t thread_id);
-
-    // 工作线程初始化以及动态调整线程数量
-    // 任务的分配
-    int manage_work_threads(bool is_init);
-
-private:
-    int thread_move_to_idle_map(int64_t thread_id);
-    int thread_move_to_running_map(int64_t thread_id);
+    // 休眠指定线程
+    int thread_move_to_idle_map(thread_id_t thread_id);
+    // 运行指定线程
+    int thread_move_to_running_map(thread_id_t thread_id);
+    // 随机唤醒一个线程
+    int thread_move_to_running_map(int thread_cnt);
     
+    // 打印线程池信息
+    static void *print_threadpool_info(void *arg);
+
 private:
+    ThreadPool(const ThreadPool&) = delete;
+    ThreadPool& operator=(const ThreadPool&) = delete;
+
+private:
+    bool print_info_;
     bool exit_;
     ThreadState state_;
     ThreadPoolConfig thread_pool_config_;// 多余的空闲线程会被杀死，直到数量达到最小允许的线程数为止。单位：秒
@@ -275,8 +319,8 @@ private:
 
     ds::Queue<Task> tasks_;   // 普通任务队列
     ds::Queue<Task> priority_tasks_; // 优先任务队列
-    std::map<int64_t, WorkThread*> runing_threads_; // 运行中的线程列表
-    std::map<int64_t, WorkThread*> idle_threads_; // 空闲的线程列表
+    std::map<thread_id_t, WorkThread*> runing_threads_; // 运行中的线程列表
+    std::map<thread_id_t, WorkThread*> idle_threads_; // 空闲的线程列表
 };
 
 /////////////////////////////// 文件流 ////////////////////////////////////////////////////
@@ -330,6 +374,10 @@ public:
     ssize_t write_file_fmt(const char *fmt, ...);
 
 private:
+    File(const File&) = delete;
+    File& operator=(const File&) = delete;
+
+private:
     int fd_;
     bool open_on_exit_;
     bool file_open_flag_;
@@ -372,7 +420,8 @@ public:
     // 获取socket信息
     int get_socket(void);
     int get_ip_info(std::string &ip, uint16_t &port);
-    bool get_socket_state(void) const {return is_enable_;}
+    std::string get_ip_info(void);
+    bool get_socket_state(void) const;
 
     // 关闭套接字
     int close(void);
@@ -382,6 +431,11 @@ public:
     // SHUT_RD(关闭读端)
     // SHUT_RDWR(关闭读和写)
     int shutdown(int how);
+
+private:
+    SocketTCP(const SocketTCP&) = delete;
+    SocketTCP& operator=(const SocketTCP&) = delete;
+
 private:
     bool is_enable_;
     int socket_;
