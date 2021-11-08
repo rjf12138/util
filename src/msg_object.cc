@@ -70,7 +70,6 @@ MsgObject::start(void)
     std::size_t min_thread = MAX_HANDER_THREAD;
     os::ThreadPoolConfig config = {min_thread, 500, os::SHUTDOWN_ALL_THREAD_IMMEDIATELY};
     msg_handle_pool_.set_threadpool_config(config);
-    msg_handle_pool_.init();
 
     os::Task task;
     task.work_func = message_forwarding_center;
