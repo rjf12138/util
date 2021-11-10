@@ -125,7 +125,7 @@ TEST_F(MsgBusTest, SingleThreadSendAndRecv)
     msg_B.sender_id_ = msg_A.id();
     msg_B.recv_msg_.write_string("Hello, world!-----1");
     msg_A.send_msg(msg_B.id(), msg_B.recv_msg_);
-
+    
     os::Time::sleep(300);
     ASSERT_EQ(msg_B.is_ok, true);
     ASSERT_EQ(msg_B.recv_count, 1);
@@ -163,7 +163,6 @@ TEST_F(MsgBusTest, MultiThreadSendAndRecv)
     msg_A.multi_thread_recv_id_ = msg_B.id();
 
     os::ThreadPool test_pool;
-    test_pool.init();
     os::Task task;
     task.work_func = MsgTest_A::msg_test_A_send_func;
     task.thread_arg = &msg_A;
@@ -172,9 +171,6 @@ TEST_F(MsgBusTest, MultiThreadSendAndRecv)
     os::Time::sleep(10000);
     EXPECT_EQ(msg_B.is_ok, true);
     EXPECT_EQ(msg_B.recv_count, 5000);
-
-    test_pool.stop_handler();
-    test_pool.wait_thread();
 }
 
 }

@@ -18,7 +18,7 @@ os::Mutex MsgObject::obj_lock_;
 MsgObject::MSG_OBJECT_MAP MsgObject::objects_;
 os::ThreadPool MsgObject::msg_handle_pool_;
 
-MsgObject::MSG_BUFFER MsgObject::msg_buffer_;
+MsgBuffer_Info_t MsgObject::msg_buffer_[MAX_HANDER_THREAD];
 
 bool 
 MsgObject::check_id(const obj_id_t &id)
@@ -49,9 +49,9 @@ MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, obj_id_t sen
     ptl.generate(ptl_content);
 
     int choose_queue_num = recv_id % MAX_HANDER_THREAD; // 确定数据所放的队列中
-    msg_buffer_[choose_queue_num]->mutex.lock();
-    msg_buffer_[choose_queue_num]->buffer += ptl_content;
-    msg_buffer_[choose_queue_num]->mutex.unlock();
+    msg_buffer_[choose_queue_num].mutex.lock();
+    msg_buffer_[choose_queue_num].buffer += ptl_content;
+    msg_buffer_[choose_queue_num].mutex.unlock();
 
     return 0;
 }
@@ -76,10 +76,7 @@ MsgObject::start(void)
     task.exit_task = MsgObject::stop;//exit_msg_center;
 
     for (int i = 0; i < MAX_HANDER_THREAD; ++i) {
-        MsgBuffer_Info_t *info_ptr = new MsgBuffer_Info_t;
-        msg_buffer_.push_back(info_ptr);
-
-        task.thread_arg = info_ptr;
+        task.thread_arg = &msg_buffer_[i];
         msg_handle_pool_.add_task(task);
     }
 
@@ -171,7 +168,6 @@ MsgObject::message_forwarding_center(void *arg)
             msg_queue->mutex.unlock();
         }
     }
-    delete msg_queue; // 释放分配的内存
     
     return nullptr;
 }
