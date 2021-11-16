@@ -1,13 +1,17 @@
 #include "util.h"
+#include "basic/logger.h"
+
+using namespace basic;
 
 namespace util {
 
 Timer::Timer(void)
-:exit_(false),
+:state_(TimerState_Exit),
 loop_gap_(5),
 timer_id_(0)
 {
     this->init();
+    state_ = TimerState_Running;
 }
 
 Timer::~Timer(void)
@@ -18,14 +22,15 @@ Timer::~Timer(void)
 int 
 Timer::run_handler(void)
 {
-    while(exit_ == false) {
-        if (timer_heap_.size() > 0 && timer_heap_[0].expire_time > time_.now()) {
+    while(state_ == TimerState_Running) {
+        if (timer_heap_.size() > 0 && timer_heap_[0].expire_time < time_.now()) {
             TimerEvent_t event;
             mutex_.lock();
             int ret = timer_heap_.pop(event);
             mutex_.unlock();
             if (ret > 0) {
                 if (event.TimeEvent_callback != nullptr) {
+                    LOG_GLOBAL_INFO("timer id: %d", event.id);
                     event.TimeEvent_callback(event.TimeEvent_arg);
                     if (event.attr == TimerEventAttr_ReAdd) {
                         this->add(event);
@@ -35,13 +40,19 @@ Timer::run_handler(void)
         }
         os::Time::sleep(loop_gap_);
     }
+
+    state_ = TimerState_Exit;
     return 0;
 }
 
 int 
 Timer::stop_handler(void)
 {
-    exit_ = true;
+    state_ = TimerState_WaitExit;
+    while (state_ != TimerState_Exit) {
+        LOG_GLOBAL_INFO("Timer waiting to stop.");
+        os::Time::sleep(1000);
+    }
     return 0;
 }
 
@@ -50,29 +61,31 @@ int
 Timer::add(TimerEvent_t &event)
 {
     if (event.wait_time <= loop_gap_) {
+        LOG_GLOBAL_WARN("Timer wait time is to short.");
         return -1;
     }
 
-    event.id = timer_id_++;
+    event.id = ++timer_id_;
     event.expire_time = time_.now() + event.wait_time;
     mutex_.lock();
     timer_heap_.push(event);
     mutex_.unlock();
 
-    return 0;
+    return event.id;
 }
 
 int 
 Timer::cancel(int id)
 {
     int ret = 0;
-    for (int i = 0; i < timer_id_; ++i) {
+    for (int i = 0; i < timer_heap_.size(); ++i) {
         if (timer_heap_[i].id == id) {
             mutex_.lock();
             ret = timer_heap_.remove(i);
             mutex_.unlock();
         }
     }
+
     return ret;
 }
 
