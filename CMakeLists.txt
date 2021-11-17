@@ -17,8 +17,8 @@ target_compile_options(util_compiler_flags INTERFACE
 		$<${msvc_cxx}:$<BUILD_INTERFACE:-W3>>)
 
 # 设置生成文件输出路径
-set(EXECUTABLE_OUTPUT_PATH, ./output/debug/bin)
-add_executable(util ./main/Test_Timer.cc)
+set(LIBRARY_OUTPUT_PATH, ./output/debug/lib)
+add_library(util STATIC "")
 
 target_include_directories(util PUBLIC ./inc/)
 target_include_directories(util PRIVATE ./extern_inc/)

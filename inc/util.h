@@ -17,8 +17,12 @@ enum TimerEventAttr {
 
 typedef void* (*TimeEvent_callback_t)(void*);
 typedef struct TimerEvent {
+    friend class Timer;
+private:
     uint32_t id; // 添加到定时器中时会返回一个ID
     os::mtime_t expire_time; // 定时器触发的时间，不能小于当前时间
+
+public:
     os::mtime_t wait_time; // 定时器等待的间隔时间。单位: ms, 必须大于 0
     void* TimeEvent_arg; // 回调函数的参数
     TimeEvent_callback_t TimeEvent_callback; // 定时器到期时的回调函数
@@ -48,11 +52,12 @@ typedef struct TimerEvent {
 } TimerEvent_t;
 
 class Timer : public os::Thread {
-enum TimerState {
-    TimerState_Exit,
-    TimerState_WaitExit,
-    TimerState_Running,
-};
+    enum TimerState {
+        TimerState_Exit,
+        TimerState_WaitExit,
+        TimerState_Running,
+    };
+
 public:
     Timer(void);
     ~Timer(void);
@@ -65,7 +70,8 @@ public:
 private:
     virtual int run_handler(void);
     virtual int stop_handler(void);
-
+    // 重新添加定时器
+    int readd(TimerEvent_t &event);
 private:
     TimerState state_;
     os::Time time_;
@@ -74,6 +80,7 @@ private:
 
     os::Mutex mutex_;
     ds::MinHeap<TimerEvent_t> timer_heap_;
+    std::set<uint32_t> ids_;
 };
 
 /////////////////////////// 消息对象 ////////////////////////////////////////////////

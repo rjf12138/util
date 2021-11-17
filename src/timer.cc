@@ -27,16 +27,20 @@ Timer::run_handler(void)
             TimerEvent_t event;
             mutex_.lock();
             int ret = timer_heap_.pop(event);
-            mutex_.unlock();
             if (ret > 0) {
                 if (event.TimeEvent_callback != nullptr) {
-                    LOG_GLOBAL_INFO("timer id: %d", event.id);
                     event.TimeEvent_callback(event.TimeEvent_arg);
                     if (event.attr == TimerEventAttr_ReAdd) {
-                        this->add(event);
+                        this->readd(event);
+                    } else {
+                        auto iter = ids_.find(event.id);
+                        if (iter != ids_.end()) {
+                            ids_.erase(iter);
+                        }
                     }
                 }
             }
+            mutex_.unlock();
         }
         os::Time::sleep(loop_gap_);
     }
@@ -61,17 +65,35 @@ int
 Timer::add(TimerEvent_t &event)
 {
     if (event.wait_time <= loop_gap_) {
-        LOG_GLOBAL_WARN("Timer wait time is to short.");
+        LOG_GLOBAL_WARN("Timer wait time is to short(must greater then %d ms).", loop_gap_);
         return -1;
     }
 
-    event.id = ++timer_id_;
+    do {
+        event.id = ++timer_id_;
+    } while (ids_.find(event.id) != ids_.end());
+
     event.expire_time = time_.now() + event.wait_time;
     mutex_.lock();
     timer_heap_.push(event);
+    ids_.insert(event.id);
     mutex_.unlock();
 
     return event.id;
+}
+
+int 
+Timer::readd(TimerEvent_t &event)
+{
+    if (event.wait_time <= loop_gap_) {
+        LOG_GLOBAL_WARN("Timer wait time is to short(must greater then %d ms).", loop_gap_);
+        return -1;
+    }
+    // 因为外部已经上锁了，所以此处不在上锁
+    event.expire_time = time_.now() + event.wait_time;
+    timer_heap_.push(event);
+
+    return 0;
 }
 
 int 
@@ -82,6 +104,11 @@ Timer::cancel(int id)
         if (timer_heap_[i].id == id) {
             mutex_.lock();
             ret = timer_heap_.remove(i);
+            
+            auto iter = ids_.find(id);
+            if (iter != ids_.end()) {
+                ids_.erase(iter);
+            }
             mutex_.unlock();
         }
     }
