@@ -5,10 +5,12 @@
 #define HTTP_RECEIVER_OBJECT_ID   "Receiver-ID"
 #define HTTP_SENDER_OBJECT_ID    "Sender-ID"
 
+using namespace basic;
+
 namespace util
 {
 os::Mutex MsgObject::run_lock_;
-bool MsgObject::is_running = false;
+MsgObjectState MsgObject::state_ = MsgObjectState_Exit;
 obj_id_t MsgObject::next_object_id_ = 0;
 
 os::Mutex MsgObject::topic_lock_;
@@ -32,7 +34,7 @@ MsgObject::check_id(const obj_id_t &id)
 int 
 MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, obj_id_t sender_id)
 {
-    if (is_running == false) {
+    if (state_ == MsgObjectState_WaitExit) {
         return -1;
     }
 
@@ -60,11 +62,11 @@ int
 MsgObject::start(void)
 {
     run_lock_.lock();
-    if (is_running == true) {
+    if (state_ == MsgObjectState_Running) {
         run_lock_.unlock();
         return 0;
     }
-    is_running = true;
+    state_ = MsgObjectState_Running;
     run_lock_.unlock();
 
     std::size_t min_thread = MAX_HANDER_THREAD;
@@ -80,9 +82,33 @@ MsgObject::start(void)
         msg_handle_pool_.add_task(task);
     }
 
+    int i = 0;  // 确保线程已经完全运行
+    for (; i < 1000; ++i) {
+        os::ThreadPoolRunningInfo info = msg_handle_pool_.get_running_info();
+        if (info.idle_threads_num + info.running_threads_num >= MAX_HANDER_THREAD) {
+            break;
+        }
+        os::Time::sleep(10);
+    }
+
+    if (i >= 1000) {
+        os::ThreadPoolRunningInfo info = msg_handle_pool_.get_running_info();
+        LOG_GLOBAL_WARN("Msgobject running thread failed[running threads: %d, targets: %d]", info.idle_threads_num + info.running_threads_num, MAX_THREADS_NUM);
+    }
+    LOG_GLOBAL_DEBUG("MsgObject is running: %ld!", os::Time::now());
     static MsgObject g_msg_object; // 这个全局的变量保证一旦消息总线开始运行，直到程序结束才会正式停止消息总线
 
     return 0;
+}
+
+void* 
+MsgObject::stop(void* arg)
+{
+    state_ = MsgObjectState_WaitExit;
+    while (state_ != MsgObjectState_Exit) {
+        os::Time::sleep(50);
+    }
+    return nullptr;
 }
 
 obj_id_t 
@@ -142,7 +168,7 @@ MsgObject::message_forwarding_center(void *arg)
 
     ptl::HttpPtl ptl;
     MsgBuffer_Info_t *msg_queue = reinterpret_cast<MsgBuffer_Info_t*>(arg);
-    while (is_running) {
+    while (state_ == MsgObjectState_Running) {
         if (msg_queue->buffer.data_size() == 0) {
             os::Time::sleep(5);
             continue;
@@ -166,9 +192,10 @@ MsgObject::message_forwarding_center(void *arg)
             msg_queue->mutex.lock();
             msg_queue->buffer.clear();
             msg_queue->mutex.unlock();
+            LOG_GLOBAL_WARN("Parse Message failed!");
         }
     }
-    
+    state_ = MsgObjectState_Exit;
     return nullptr;
 }
 

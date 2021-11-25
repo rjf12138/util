@@ -11,7 +11,6 @@ loop_gap_(5),
 timer_id_(0)
 {
     this->init();
-    state_ = TimerState_Running;
 }
 
 Timer::~Timer(void)
@@ -22,6 +21,7 @@ Timer::~Timer(void)
 int 
 Timer::run_handler(void)
 {
+    state_ = TimerState_Running;
     while(state_ == TimerState_Running) {
         if (timer_heap_.size() > 0 && timer_heap_[0].expire_time < time_.now()) {
             TimerEvent_t event;
@@ -61,17 +61,17 @@ Timer::stop_handler(void)
 }
 
 // 添加定时器,错误返回-1， 成功返回一个定时器id
-int 
+timer_id_t 
 Timer::add(TimerEvent_t &event)
 {
     if (event.wait_time <= loop_gap_) {
         LOG_GLOBAL_WARN("Timer wait time is to short(must greater then %d ms).", loop_gap_);
-        return -1;
+        return INVAILD_TIMER_ID;
     }
 
     do {
         event.id = ++timer_id_;
-    } while (ids_.find(event.id) != ids_.end());
+    } while (ids_.find(event.id) != ids_.end() || event.id == INVAILD_TIMER_ID);
 
     event.expire_time = time_.now() + event.wait_time;
     mutex_.lock();
@@ -97,7 +97,7 @@ Timer::readd(TimerEvent_t &event)
 }
 
 int 
-Timer::cancel(int id)
+Timer::cancel(timer_id_t id)
 {
     int ret = 0;
     for (int i = 0; i < timer_heap_.size(); ++i) {
