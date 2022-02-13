@@ -45,7 +45,6 @@
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <netdb.h>
 
 #elif defined(__RJF_WINDOWS__)
 #include <window.h>

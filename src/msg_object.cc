@@ -2,8 +2,9 @@
 #include "protocol/protocol.h"
 
 // 内部自定义HTTP消息头
-#define HTTP_RECEIVER_OBJECT_ID   "Receiver-ID"
-#define HTTP_SENDER_OBJECT_ID    "Sender-ID"
+#define HTTP_RECEIVER_OBJECT_ID     "Receiver-ID"
+#define HTTP_SENDER_OBJECT_ID       "Sender-ID"
+#define HTTP_SENDER_TOPIC           "Topic"
 
 using namespace basic;
 
@@ -32,7 +33,7 @@ MsgObject::check_id(const obj_id_t &id)
 }
 
 int 
-MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, obj_id_t sender_id)
+MsgObject::send_msg(obj_id_t recv_id, const std::string topic, const basic::ByteBuffer &msg, obj_id_t sender_id)
 {
     if (state_ == MsgObjectState_WaitExit) {
         return -1;
@@ -47,6 +48,7 @@ MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg, obj_id_t sen
     ptl.set_request(HTTP_METHOD_POST, "/");
     ptl.set_header_option(HTTP_RECEIVER_OBJECT_ID, std::to_string(recv_id));
     ptl.set_header_option(HTTP_SENDER_OBJECT_ID, std::to_string(sender_id));
+    ptl.set_header_option(HTTP_SENDER_TOPIC, topic);
     ptl.set_content(msg);
     ptl.generate(ptl_content);
 
@@ -180,11 +182,12 @@ MsgObject::message_forwarding_center(void *arg)
         if (err_code == ptl::HttpParse_OK) {
             obj_id_t sender_id = std::stoul(ptl.get_header_option(HTTP_SENDER_OBJECT_ID));
             obj_id_t recv_id = std::stoul(ptl.get_header_option(HTTP_RECEIVER_OBJECT_ID));
+            std::string topic = ptl.get_header_option(HTTP_SENDER_TOPIC);
 
             auto find_iter = objects_.find(recv_id);
             if (find_iter != objects_.end()) {
                 if (find_iter->second != nullptr) {
-                    find_iter->second->msg_handler(sender_id, ptl.get_content());
+                    find_iter->second->msg_handler(sender_id, ptl.get_content(), topic);
                 }
             }
         } else {
@@ -219,21 +222,55 @@ MsgObject::~MsgObject(void)
 }
 
 int 
-MsgObject::msg_handler(obj_id_t sender, const basic::ByteBuffer &msg)
+MsgObject::msg_handler(obj_id_t sender, basic::ByteBuffer &msg, std::string topic)
 {
     return 0;
 }
 
-int MsgObject::send_msg(obj_id_t recv_id, const basic::ByteBuffer &msg)
+int MsgObject::send_msg(obj_id_t recv_id, basic::ByteBuffer &msg)
 {
-    return MsgObject::send_msg(recv_id, msg, id_);
+    return MsgObject::send_msg(recv_id, "none", msg, id_);
 }
 
 //////////////////////// 观察者模式 ///////////////////////////////////
+bool 
+MsgObject::check_topic(const std::string &topic)
+{
+    if (topic.length() == 0) {
+        return false;
+    }
+
+    for (int i = 0; i < topic.length(); ++i) {
+        if (topic[i] >= 'a' && topic[i] <= 'z') {
+            continue;
+        }
+
+        if (topic[i] >= 'A' && topic[i] <= 'Z') {
+            continue;
+        }
+
+        if (topic[i] == '_') {
+            continue;
+        }
+
+        return false;
+    }
+
+    if (topic_.find(topic) != topic_.end()) {
+        return false;
+    }
+
+    if (topic == "none") { // none默认为空
+        return false;
+    }
+
+    return true;
+}
+
 int 
 MsgObject::create_topic(const std::string &topic)
 {
-    if (topic_.find(topic) != topic_.end()) {
+    if (check_topic(topic) == false) {
         return -1;
     }
 
@@ -251,16 +288,20 @@ MsgObject::create_topic(const std::string &topic)
 int 
 MsgObject::delete_topic(const std::string &topic)
 {
-    auto topic_iter = topic_.find(topic);
-    if (topic_iter != topic_.end()) {
-        topic_.erase(topic_iter);
-    }
-
     auto subscribe_iter = subscribe_object_.find(topic);
     if (subscribe_iter != subscribe_object_.end()) {
+        if (subscribe_iter->second.first != id_) {
+            return -1;
+        }
+
         topic_lock_.lock();
         subscribe_object_.erase(subscribe_iter);
         topic_lock_.unlock();
+    }
+
+    auto topic_iter = topic_.find(topic);
+    if (topic_iter != topic_.end()) {
+        topic_.erase(topic_iter);
     }
 
     return 0;
@@ -274,9 +315,13 @@ MsgObject::publish_msg(const std::string &topic, const basic::ByteBuffer &msg)
         return -1;
     }
 
+    if (subscribe_iter->second.first != id_) {
+        return -1;
+    }
+
     int sum = 0;
     for (auto iter = subscribe_iter->second.second.begin(); iter != subscribe_iter->second.second.end(); ++iter) {
-        int ret = MsgObject::send_msg(*iter, msg, id_);
+        int ret = MsgObject::send_msg(*iter, topic, msg, id_);
         if (ret >= 0) {
             ++sum;
         }

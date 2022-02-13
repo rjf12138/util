@@ -24,7 +24,7 @@ public:
         recv_count = 0;
     }
 
-    virtual int msg_handler(obj_id_t sender, const basic::ByteBuffer &msg) {
+    virtual int msg_handler(obj_id_t sender, basic::ByteBuffer &msg, std::string topic) {
         if (is_ok == true) {
             if (sender == sender_id_ && msg == recv_msg_) {
                 ++recv_count;
@@ -70,7 +70,7 @@ public:
         recv_count = 0;
     }
 
-    virtual int msg_handler(obj_id_t sender, const basic::ByteBuffer &msg) {
+    virtual int msg_handler(obj_id_t sender, basic::ByteBuffer &msg, std::string topic) {
         if (is_ok == true) {
             if (sender == sender_id_ && msg == recv_msg_) {
                 ++recv_count;
