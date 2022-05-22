@@ -24,7 +24,7 @@ public:
         recv_count = 0;
     }
 
-    virtual int msg_handler(obj_id_t sender, basic::ByteBuffer &msg, std::string topic) {
+    virtual int msg_handler(obj_id_t sender, basic::ByteBuffer &msg, topic_t topic) {
         if (is_ok == true) {
             if (sender == sender_id_ && msg == recv_msg_) {
                 ++recv_count;
@@ -40,7 +40,7 @@ public:
             return nullptr;
         }
 
-        MsgTest_A *msg_test_ptr = (MsgTest_A*)arg;
+        MsgTest_A *msg_test_ptr = static_cast<MsgTest_A*>(arg);
         msg_test_ptr->recv_msg_.write_string("Hello, world!-----1");
         for (int i = 0; i < 5000; ++i) {
             msg_test_ptr->send_msg(msg_test_ptr->multi_thread_recv_id_, msg_test_ptr->recv_msg_);
@@ -70,7 +70,7 @@ public:
         recv_count = 0;
     }
 
-    virtual int msg_handler(obj_id_t sender, basic::ByteBuffer &msg, std::string topic) {
+    virtual int msg_handler(obj_id_t sender, basic::ByteBuffer &msg, topic_t topic) {
         if (is_ok == true) {
             if (sender == sender_id_ && msg == recv_msg_) {
                 ++recv_count;
@@ -86,7 +86,7 @@ public:
             return nullptr;
         }
 
-        MsgTest_B *msg_test_ptr = (MsgTest_B*)arg;
+        MsgTest_B *msg_test_ptr = static_cast<MsgTest_B*>(arg);
         msg_test_ptr->recv_msg_.write_string("Hello, world!-----1");
         for (int i = 0; i < 5000; ++i) {
             msg_test_ptr->send_msg(msg_test_ptr->multi_thread_recv_id_, msg_test_ptr->recv_msg_);

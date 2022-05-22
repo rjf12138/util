@@ -26,7 +26,7 @@ Timer::run_handler(void)
         if (timer_heap_.size() > 0 && timer_heap_[0].expire_time < time_.now()) {
             TimerEvent_t event;
             mutex_.lock();
-            int ret = timer_heap_.pop(event);
+            ssize_t ret = timer_heap_.pop(event);
             if (ret > 0) {
                 if (event.TimeEvent_callback != nullptr) {
                     event.TimeEvent_callback(event.TimeEvent_arg);
@@ -82,7 +82,7 @@ Timer::add(TimerEvent_t &event)
     return event.id;
 }
 
-int 
+ssize_t 
 Timer::readd(TimerEvent_t &event)
 {
     if (event.wait_time <= loop_gap_) {
@@ -96,10 +96,10 @@ Timer::readd(TimerEvent_t &event)
     return 0;
 }
 
-int 
+ssize_t 
 Timer::cancel(timer_id_t id)
 {
-    int ret = 0;
+    ssize_t ret = 0;
     for (int i = 0; i < timer_heap_.size(); ++i) {
         if (timer_heap_[i].id == id) {
             mutex_.lock();
