@@ -1,3 +1,0 @@
-/home/ruanjian/workspace/project_v/util/build/CMakeFiles/util.dir
-/home/ruanjian/workspace/project_v/util/build/CMakeFiles/edit_cache.dir
-/home/ruanjian/workspace/project_v/util/build/CMakeFiles/rebuild_cache.dir
