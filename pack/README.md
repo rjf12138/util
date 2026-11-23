@@ -9,8 +9,8 @@
 
 产物：
 
-- `~/.project_manager/repo/util-0.1.1.pm`
-- `~/.project_manager/repo/util-0.1.1.pm.sha256`
+- `~/.project_manager/repo/util-0.1.2.pm`
+- `~/.project_manager/repo/util-0.1.2.pm.sha256`
 
 包内结构：
 
