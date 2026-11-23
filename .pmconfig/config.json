@@ -1,0 +1,111 @@
+{
+  "name": "util",
+  "version": "0.1.1",
+  "path": "/home/ruanjian/workspace/project/util",
+  "uuid": "615d3385-7560-4d77-baf3-b7ee1ae8c144",
+  "build_system": "cmake",
+  "cmake_minimum_version": "3.10",
+  "language": "CXX",
+  "cxx_standard": 14,
+  "source_dirs": [
+    "src"
+  ],
+  "include_dirs": [
+    "inc"
+  ],
+  "extern_inc_dir": "extern_inc",
+  "lib_dir": "lib",
+  "output_dir": "output",
+  "main_file": "Test_MsgBus.cc",
+  "build_mode": "debug",
+  "generate_type": "static_lib",
+  "dependencies": [
+    {
+      "name": "protocol",
+      "version": "0.1.1",
+      "lib_type": "static"
+    },
+    {
+      "name": "algorithm",
+      "version": "0.1.1",
+      "lib_type": "static"
+    },
+    {
+      "name": "basic",
+      "version": "0.1.1",
+      "lib_type": "static"
+    },
+    {
+      "name": "system",
+      "version": "0.1.1",
+      "lib_type": "static"
+    },
+    {
+      "name": "data_structure",
+      "version": "0.1.1",
+      "lib_type": "header-only"
+    },
+    {
+      "name": "ncurses",
+      "version": "6.2",
+      "lib_type": "static"
+    },
+    {
+      "name": "gtest",
+      "version": "1.14.0",
+      "lib_type": "static"
+    }
+  ],
+  "deps": {
+    "libs": [
+      "protocol",
+      "algorithm",
+      "basic",
+      "system",
+      "ncurses++",
+      "form",
+      "menu",
+      "panel",
+      "ncurses",
+      "gtest",
+      "pthread"
+    ],
+    "lib_dirs": [],
+    "inc_dirs": [],
+    "src_dirs": []
+  },
+  "build_options": {
+    "debug": {
+      "defines": [
+        "DEBUG"
+      ],
+      "optimization": "-O0 -Wall"
+    },
+    "release": {
+      "defines": [
+        "NDEBUG"
+      ],
+      "optimization": "-O2 -Wall"
+    }
+  },
+  "targets": [
+    {
+      "name": "util",
+      "type": "static_lib"
+    },
+    {
+      "name": "Test_MsgBus",
+      "type": "executable",
+      "source_files": [
+        "main/Test_MsgBus.cc"
+      ]
+    },
+    {
+      "name": "Test_Timer",
+      "type": "executable",
+      "source_files": [
+        "main/Test_Timer.cc"
+      ]
+    }
+  ]
+}
