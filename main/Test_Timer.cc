@@ -8,6 +8,10 @@
 #include "util.h"
 #include "basic/logger.h"
 
+#include <cstdlib>
+#include <ctime>
+#include <vector>
+
 using namespace basic;
 using namespace util;
 
@@ -19,42 +23,49 @@ struct TimerArg {
 };
 
 void* timer_callback(void* arg);
+
 int main(int argc, char **argv)
 {
-    Timer timer;
-    TimerEvent_t timer_event;
+    (void)argc;
+    (void)argv;
 
-    uint32_t timer_task_num = 50;
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
+    const uint32_t timer_task_num = 50;
     std::vector<TimerArg*> times;
-    std::vector<int> time_gap = {20, 1000, 2000, 4000, 8000, 1600, 3200, 6400};
+    std::vector<os::mtime_t> time_gap = {20, 1000, 2000, 4000, 8000, 1600, 3200, 6400};
 
+    {
+        Timer timer;
+        TimerEvent_t timer_event;
 
-    for (uint32_t i = 0; i < timer_task_num; ++i) {
-        TimerArg *arg_ptr = new TimerArg;
-        times.push_back(arg_ptr);
-        arg_ptr->num = i;
-        arg_ptr->start_times = os::Time::now();
-        arg_ptr->time_gap = time_gap[(uint32_t)rand() % time_gap.size()];
+        for (uint32_t i = 0; i < timer_task_num; ++i) {
+            TimerArg *arg_ptr = new TimerArg;
+            arg_ptr->num = i;
+            arg_ptr->start_times = os::Time::now();
+            arg_ptr->time_gap = time_gap[static_cast<std::size_t>(std::rand()) % time_gap.size()];
 
-        timer_event.wait_time = arg_ptr->time_gap;
-        timer_event.TimeEvent_arg = arg_ptr;
-        timer_event.TimeEvent_callback = timer_callback;
-        timer_event.attr = TimerEventAttr_ReAdd;
-        int tid = timer.add(timer_event);
-    }
+            timer_event.wait_time = arg_ptr->time_gap;
+            timer_event.TimeEvent_arg = arg_ptr;
+            timer_event.TimeEvent_callback = timer_callback;
+            timer_event.attr = TimerEventAttr_ReAdd;
 
-    while (true) {
-        char ch = getchar();
-        if (ch == 'q') {
-            break;
-        } else if (ch == 's') {
-            // timer.cancel(tid);
-            // LOG_GLOBAL_INFO("Cancel timer[id: %d]", tid);
+            timer_id_t tid = timer.add(timer_event);
+            if (tid == INVALID_TIMER_ID) {
+                LOG_GLOBAL_ERROR("Add timer failed, num: %u", arg_ptr->num);
+            }
+            times.push_back(arg_ptr);
         }
 
-    }
+        while (true) {
+            int ch = std::getchar();
+            if (ch == 'q' || ch == EOF) {
+                break;
+            }
+        }
+    } // Timer 先停止并 join，之后才能安全释放回调参数
 
-    for (int i = 0; i <times.size(); ++i) {
+    for (std::size_t i = 0; i < times.size(); ++i) {
         delete times[i];
     }
 
@@ -67,12 +78,16 @@ void* timer_callback(void* arg)
         return nullptr;
     }
 
-    TimerArg *num = (TimerArg*)arg;
+    TimerArg *num = static_cast<TimerArg*>(arg);
     os::mtime_t curr_time = os::Time::now();
-    os::mtime_t time_gap = num->start_times + num->time_gap;
-    int dev = (curr_time > time_gap ? curr_time - time_gap : time_gap - curr_time);
+    os::mtime_t target_time = num->start_times + num->time_gap;
+    os::mtime_t dev = (curr_time > target_time ? curr_time - target_time : target_time - curr_time);
     if (dev > deviation) {
-        LOG_GLOBAL_INFO("Timed tasks are too slow[num: %d, time_gap: %d, target_deviation: %d, real_deviation: %d]", num->num, num->time_gap, deviation, dev);
+        LOG_GLOBAL_INFO("Timed tasks are too slow[num: %u, time_gap: %llu, target_deviation: %llu, real_deviation: %llu]",
+                        num->num,
+                        static_cast<unsigned long long>(num->time_gap),
+                        static_cast<unsigned long long>(deviation),
+                        static_cast<unsigned long long>(dev));
     }
     num->start_times = os::Time::now();
 

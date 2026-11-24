@@ -1,5 +1,7 @@
 Problem
-1. 设置最大定时任务， 定义定时器id类型
-2. 接收订阅消息时不能判断topic
-3. 如果topic后创建，而订阅的类先创建则会出现订阅失败的问题。
+1. [已完成] 设置最大定时任务(MAX_TIMER_EVENT_NUM)，定义定时器 id 类型(timer_id_t)。
+2. [已完成] 接收订阅消息时通过 msg_handler(sender, msg, topic) 判断 topic。
+3. [已完成] 支持先订阅、后创建 topic(pending_subscribe_)。
+4. [使用约束] MsgObject 派生类如果仍有消息可能投递，析构函数中应先调用 detach_from_bus()，
+   等待正在执行的回调结束后再释放派生类成员。
 

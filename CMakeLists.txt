@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(util VERSION 0.1.2 LANGUAGES CXX)
+project(util VERSION 0.1.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -55,6 +55,11 @@ add_executable(Test_Timer
     ${SRC_FILES}
 )
 
+add_executable(Test_Util
+    ${CMAKE_SOURCE_DIR}/main/Test_Util.cc
+    ${SRC_FILES}
+)
+
 # Include dirs for target util
 target_include_directories(util PRIVATE ${CMAKE_SOURCE_DIR}/inc)
 target_include_directories(util PRIVATE ${CMAKE_SOURCE_DIR}/extern_inc)
@@ -69,6 +74,11 @@ target_include_directories(Test_MsgBus PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(Test_Timer PRIVATE ${CMAKE_SOURCE_DIR}/inc)
 target_include_directories(Test_Timer PRIVATE ${CMAKE_SOURCE_DIR}/extern_inc)
 target_include_directories(Test_Timer PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+# Include dirs for target Test_Util
+target_include_directories(Test_Util PRIVATE ${CMAKE_SOURCE_DIR}/inc)
+target_include_directories(Test_Util PRIVATE ${CMAKE_SOURCE_DIR}/extern_inc)
+target_include_directories(Test_Util PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 # Legacy dependencies
 target_link_libraries(util
@@ -98,6 +108,19 @@ target_link_libraries(Test_MsgBus
     pthread
 )
 target_link_libraries(Test_Timer
+    protocol
+    algorithm
+    basic
+    system
+    ncurses++
+    form
+    menu
+    panel
+    ncurses
+    gtest
+    pthread
+)
+target_link_libraries(Test_Util
     protocol
     algorithm
     basic

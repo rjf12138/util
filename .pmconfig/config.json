@@ -1,6 +1,6 @@
 {
   "name": "util",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "path": "/home/ruanjian/workspace/project/util",
   "uuid": "615d3385-7560-4d77-baf3-b7ee1ae8c144",
   "build_system": "cmake",
@@ -105,6 +105,13 @@
       "type": "executable",
       "source_files": [
         "main/Test_Timer.cc"
+      ]
+    },
+    {
+      "name": "Test_Util",
+      "type": "executable",
+      "source_files": [
+        "main/Test_Util.cc"
       ]
     }
   ]

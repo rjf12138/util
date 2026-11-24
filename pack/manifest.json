@@ -1,6 +1,6 @@
 {
   "name": "util",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "C++ utility library: MsgObject message bus and Timer",
   "author": "ruanjian",
   "lib_type": "static",

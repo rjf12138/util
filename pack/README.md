@@ -9,8 +9,8 @@
 
 产物：
 
-- `~/.project_manager/repo/util-0.1.2.pm`
-- `~/.project_manager/repo/util-0.1.2.pm.sha256`
+- `~/.project_manager/repo/util-0.1.3.pm`
+- `~/.project_manager/repo/util-0.1.3.pm.sha256`
 
 包内结构：
 
@@ -31,6 +31,18 @@ pm deps add util -p MyApp
 #include <util/util.h>
 ```
 
+### 析构注意
+
+如果 `MsgObject` 派生类对象在析构时仍可能收到消息，请在派生类析构函数中先调用
+`detach_from_bus()`，等待正在执行的回调结束后再释放派生类成员：
+
+```cpp
+class MyReceiver : public util::MsgObject {
+public:
+    ~MyReceiver() override { detach_from_bus(); }
+};
+```
+
 ## 测试
 
 ```bash
@@ -38,7 +50,8 @@ pm deps install util
 pm build util
 ```
 
-- `Test_MsgBus`：gtest 用例，整套约 22 秒，已实测通过；
+- `Test_MsgBus`：gtest 用例，消息总线收发/并发发送，约 0.4 秒；
+- `Test_Util`：gtest 用例，Timer 与 topic 生命周期回归，约 0.4 秒；
 - `Test_Timer`：交互式测试，运行后输入 `q` 退出。
 
 ## 升级版本
